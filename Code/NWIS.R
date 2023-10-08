@@ -89,7 +89,7 @@ write.csv(df.NWIS.TP_sites, "C:/PhD/CQ/Raw_Data/df.NWIS.TP_sites.csv", row.names
 # download the raw daily flow data for these sites. To do this:
 # readNWISdv can be used to download a single dataframe with all the raw flow data for a vector of gauge numbers (this takes a looong time):
 
-df.NWIS.Q<-readNWISdv(siteNumbers = df.NWIS.TP_sites$site_no, parameterCd = '00060', startDate = min(df.NWIS.TP$begin_date), endDate = "", statCd = "00003")
+df.NWIS.Q<-readNWISdv(siteNumbers = df.NWIS.TP_sites$site_no, parameterCd = '00060', startDate = "", endDate = "", statCd = "00003")
 
 write.csv(df.NWIS.Q, "C:/PhD/CQ/Raw_Data/df.NWIS.Q.csv", row.names=FALSE)
 
@@ -131,7 +131,6 @@ df.NWIS.TP_CQ<-left_join(df.NWIS.TP_CQ,temp, by='site_no')%>%
 df.NWIS.TP_site_metadata<-readNWISsite(siteNumbers = unique(df.NWIS.TP_CQ$site_no))
 
 write.csv(df.NWIS.TP_site_metadata, "C:/PhD/CQ/Raw_Data/df.NWIS.TP_site_metadata.csv", row.names=FALSE)
-
 
 # then select just the site number and DA column:
 
@@ -278,7 +277,7 @@ df_Seg<-left_join(df_Seg, temp[,c(1,3)], by = c('site'='site_no'))%>%
 
 # ready to plot:
 
-ggplot(df_Seg, aes(x = log(Q_real), y = log(C)))+
+p<-ggplot(df_Seg, aes(x = log(Q_real), y = log(C)))+
   geom_point()+
   geom_smooth(method = 'lm')+
   geom_line(aes(x = Q, y = Seg_C), color = 'tomato')+
@@ -303,18 +302,12 @@ map.NWIS.TP_sites<-df.NWIS.TP_site_metadata%>%
   mutate(site_id= paste(site_no, station_nm), n = NA, .before = 1)%>%
   select(c(1:3))
 
-mapview(map.NWIS.TP_sites)
+# mapview(map.NWIS.TP_sites)
 
 
+# finally save image to workspace:
 
-
-
-
-# save.image(file = 'C:/PhD/Research/Code/CQ/Large_Scale_CQ_1.Rdata')
-
-load('C:/PhD/Research/Code/CQ/Large_Scale_CQ_1.Rdata')
-
-
+save.image(file = 'C:/PhD/CQ/Processed_Data/NWIS.Rdata')
 
 
 

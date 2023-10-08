@@ -49,6 +49,8 @@ source("C:/PhD/CQ/Code/Ryan_functions.R")
 
 df.NWIS.Q_sites<- whatNWISdata(stateCd = 'NY', parameterCd = "00060")
 
+write.csv(df.NWIS.Q_sites, "C:/PhD/CQ/Raw_Data/df.NWIS.Q_sites.csv", row.names=FALSE)
+
 # clean up this dataframe
 
 # there are duplicates of site numbers with different numbers of daily flow observations

@@ -257,8 +257,6 @@ df_Seg<-df_Seg%>%
 df_Seg<-left_join(df_Seg, temp[,c(1,3)], by = c('site'='site_no'))%>%
   arrange(n_sample_rank)
 
-save.image(file = 'C:/PhD/CQ/Processed_Data/NWIS.Rdata')
-
 # ready to plot:
 
 ggplot(df_Seg, aes(x = log(Q_real), y = log(C)))+

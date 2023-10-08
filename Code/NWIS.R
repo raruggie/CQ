@@ -74,16 +74,30 @@ df.NWIS.Q_sites<-df.NWIS.Q_sites%>%
 
 # use function I created (sourced) to get a dataframe of sites for just TP with #samples = 20 threshold:
 
-df.NWIS.TP<-fun.df.Pair_consit_flow('00665', df.NWIS.Q_sites, n_samples = 20)
+df.NWIS.TP_sites<-fun.df.Pair_consit_flow('00665', df.NWIS.Q_sites, n_samples = 20)
+
+write.csv(df.NWIS.TP_sites, "C:/PhD/CQ/Raw_Data/df.NWIS.TP_sites.csv", row.names=FALSE)
+
+# finished up to here saving everything...long day of learning
+
+
+
+
+
+
 
 # download the raw daily flow data for these sites. To do this:
 # readNWISdv can be used to download a single dataframe with all the raw flow data for a vector of gauge numbers (this takes a looong time):
 
-df.NWIS.Q<-readNWISdv(siteNumbers = df.NWIS.TP$site_no, parameterCd = '00060', startDate = min(df.NWIS.TP$begin_date), endDate = "", statCd = "00003")
+df.NWIS.Q<-readNWISdv(siteNumbers = df.NWIS.TP_sites$site_no, parameterCd = '00060', startDate = min(df.NWIS.TP$begin_date), endDate = "", statCd = "00003")
+
+write.csv(df.NWIS.Q, "C:/PhD/CQ/Raw_Data/df.NWIS.Q.csv", row.names=FALSE)
 
 # download the raw discrete TP sample data:
 
-df.NWIS.TP<-readNWISqw(siteNumbers = df.NWIS.TP$site_no, parameterCd = '00665')
+df.NWIS.TP<-readNWISqw(siteNumbers = df.NWIS.TP_sites$site_no, parameterCd = '00665')
+
+write.csv(df.NWIS.TP, "C:/PhD/CQ/Raw_Data/df.NWIS.TP.csv", row.names=FALSE)
 
 # now join the TP with the flow df:
 
@@ -115,6 +129,9 @@ df.NWIS.TP_CQ<-left_join(df.NWIS.TP_CQ,temp, by='site_no')%>%
 # download the drainage areas from site metadata using readNWISsite
 
 df.NWIS.TP_site_metadata<-readNWISsite(siteNumbers = unique(df.NWIS.TP_CQ$site_no))
+
+write.csv(df.NWIS.TP_site_metadata, "C:/PhD/CQ/Raw_Data/df.NWIS.TP_site_metadata.csv", row.names=FALSE)
+
 
 # then select just the site number and DA column:
 

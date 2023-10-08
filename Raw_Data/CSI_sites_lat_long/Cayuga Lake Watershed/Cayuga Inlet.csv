@@ -1,0 +1,74 @@
+Name,Code,Latitude,Longitude,Miles from the mouth,Type
+Cass Park,CICP,42.4554,-76.5121,0.45,SYNOPTIC
+Acoustic Doppler,CIAD,42.4543,-76.5103,0.55,INVESTIGATIVE
+Farmers\ Market,CIFM,42.4502,-76.5117,0.8,SYNOPTIC
+Cascadilla Creek Mouth,CCM,42.4513,-76.5047,0.9,SYNOPTIC
+Route 89,CI89,42.4435,-76.5136,1.175,SYNOPTIC
+Flood Control Channel Esty St,FCCE,42.4427,-76.5117,1.2,SYNOPTIC
+Cherry and Taber St,CICT,42.4389,-76.5163,1.72,SYNOPTIC
+Flood Control Channel at Wegman\s,FCCW,42.4337,-76.5115,1.9,SYNOPTIC
+Coy Glen near Mouth,CGM,42.4275,-76.5233,2.4,SYNOPTIC
+Buttermilk Creek Mouth,BCM,42.4166,-76.5216,3.5,SYNOPTIC
+Buttermilk Crk (upstream),CIBC,42.4164,-76.5276,3.6,SYNOPTIC
+Enfield Creek near Mouth,ECM,42.3991,-76.5451,5.5,SYNOPTIC
+Blakeslee Hill,BH1,42.3847,-76.5554,6.8,SYNOPTIC
+Lickbrook at W. Jersey Hill,LBWJ,42.3743,-76.5206,7.5,SYNOPTIC
+Depot Road (Newfield),DR3,42.3631,-76.5785,9.1,SYNOPTIC
+Brown Road,BR2,42.3473,-76.5399,9.8,SYNOPTIC
+Buttermilk Crk - Jennings Pnd,BCJP,42.3469,-76.4869,9.8,SYNOPTIC
+Enfield Creek at Upper Treman,ECUT,42.4147,-76.6203,9.9,SYNOPTIC
+Upstream of Dam,MS4,42.3611,-76.5944,10,SYNOPTIC
+Enfield Creek at Enfield Center,ECEC,42.4359,-76.6297,11.7,SYNOPTIC
+Station Road by Newfield Group,CISR-2N,42.3205,-76.5182,12.3,SYNOPTIC
+Station Road by Buttermilk Group,CISR-1B,42.3205,-76.5182,12.3,SYNOPTIC
+Fishkill Creek @ Fishkill Rd.,Fishkill-Up (FKU),42.383,-76.6076,,SYNOPTIC
+Fishkill Creek @ Butternut Creek Rd.,Fishkill-Down (FKD),42.3958,-76.5929,,SYNOPTIC
+Fishkill Tributary,AWS-Down,42.3871,-76.6051,,INVESTIGATIVE
+Inlet Stream- Upstream,CIUS,42.4236,-76.5226,,INVESTIGATIVE
+Inlet Stream- Seep,CISP,42.4232,-76.5212,,INVESTIGATIVE
+Inlet Stream- Downstream,CIDS,42.4237,-76.5208,,INVESTIGATIVE
+Buttermilk Creek @West Miller Road,BCWM,42.3676,-76.4903,,SYNOPTIC
+Buttermilk Creek @ East Miller Road and Danby,BCEM,42.3677,-76.487,,SYNOPTIC
+Buttermilk Creek @Utility Corridor,BCUC,42.383,-76.5022,,INVESTIGATIVE
+Flood Control Channel at Nate\s Floral Estates North,FCCN,42.4363,-76.5125,,INVESTIGATIVE
+Flood Control Channel at Nate\s Floral Estates South,FCCS,42.4352,-76.5116,,INVESTIGATIVE
+Downstream of Cornell University Borehole Observatory (CUBO) Site,DCUBO,42.441225,-76.463814,,RED FLAG
+Cascadilla Creek - Thompson Park,,42.445081,-76.499623,,BIOLOGICAL
+Cascadilla Creek - Hancock Street,,42.447921,-76.501958,,BIOLOGICAL
+Enfield Creek - Upper Treman,,42.402741,-76.588935,,BIOLOGICAL
+Fishkill Creek-Upper Treman,,42.402467,-76.587969,,BIOLOGICAL
+Upstream of Cornell University Borehole Observatory (CUBO) Site,UCUBO,42.441098,-76.456678,,RED FLAG
+Buttermilk Creek - Lower Buttermilk,,42.417105,-76.522558,,BIOLOGICAL
+Buttermilk Creek - Upper Buttermilk,,42.40174,-76.512054,,BIOLOGICAL
+Cascadilla Creek Headwaters,CCHW,42.437297,-76.413739,,INVESTIGATIVE
+Cascadilla Creek - East Hill Recway,,42.441283,-76.450272,,BIOLOGICAL
+Cayuga Inlet - Station Rd,,42.32015193,-76.51823609,,BIOLOGICAL
+Cayuga Inlet - 13/13A,,42.41196,-76.53028,,BIOLOGICAL
+West Branch Cayuga Inlet - Newfield Roundabout,,42.360623,-76.598496,,BIOLOGICAL
+Cayuga Inlet - behind Home Depot,,42.423119,-76.523706,,BIOLOGICAL
+Enfield Creek - Upper Enfield,,42.4151,-76.6198,,BIOLOGICAL
+Cayuga Inlet - at Enfield Creek,,42.398875,-76.542985,,BIOLOGICAL
+Cascadilla Creek - Genung Rd,,42.43726835,-76.41369147,,BIOLOGICAL
+Cascadilla Creek - Cornell Aquaculture Building,,42.4415101,-76.46827729,,BIOLOGICAL
+Cascadilla Creek - Game Farm Rd,,42.44091728,-76.44833379,,BIOLOGICAL
+FCC Tributary at Spencer Rd.,FCC1,42.4261,-76.5087,,INVESTIGATIVE
+Flood Control Channel at Lowe\s,FCC2,42.4304,-76.5115,,INVESTIGATIVE
+Merwin\s Creek,MER3,42.4235,-76.5044,,INVESTIGATIVE
+Spring Above NCR,MER3A,42.4241,-76.5024,,INVESTIGATIVE
+96B at Ithaca College,MER7,42.4211,-76.5011,,INVESTIGATIVE
+333 Spencer Rd,TRIB333,42.4288,-76.5041,,INVESTIGATIVE
+Merwin\s Creek above Stone Quarry,MER2,42.4252,-76.5077,,INVESTIGATIVE
+Below Longview,MER4,42.4208,-76.5045,,INVESTIGATIVE
+Below 96B,MER5,42.4216,-76.5045,,INVESTIGATIVE
+Soccer Fields,MER6,42.4212,-76.5011,,INVESTIGATIVE
+Chapel Pond,IC POND {MER8},42.4226,-76.4973,,RED FLAG
+600 Spencer,TRIB600,42.4231,-76.5135,,INVESTIGATIVE
+314 Spencer,MORSE,42.4307,-76.5024,,INVESTIGATIVE
+Stone Quarry Inferior,SQ2,42.4184,-76.5102,,RED FLAG
+Stone Quarry Superior,SQ1,42.4183,-76.5078,,RED FLAG
+Bob Robinson Family Preserve,BRFP,42.3426,-76.5451,,RED FLAG
+IC Natural Resource Reserve,ICNRR,42.3434,-76.5515,,RED FLAG
+Fen - IC Natural Resource Reserve,FEN,42.3424,-76.5521,,RED FLAG
+West Branch Cayuga Inlet - tributary,,42.3595,-76.5985,,BIOLOGICAL
+Cayuga Inlet Creek - 300m upstream of Enfield Creek,,42.3969,-76.543,,BIOLOGICAL
+Enfield Creek Mouth,,42.3981,-76.5467,,

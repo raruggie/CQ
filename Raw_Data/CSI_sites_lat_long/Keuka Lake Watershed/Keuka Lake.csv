@@ -1,0 +1,17 @@
+Name,Code,Latitude,Longitude,Miles from the mouth,Type
+Central Shallow,K1,42.4925,-77.1503,,SYNOPTIC
+Central Deep,K2,42.4925,-77.1503,,SYNOPTIC
+East Branch Shallow,K3,42.5491,-77.1024,,SYNOPTIC
+East Branch Deep,K4,42.5491,-77.1024,,SYNOPTIC
+West Branch Shallow,K5,42.5594,-77.1458,,SYNOPTIC
+West Branch Deep,K6,42.5594,-77.1458,,SYNOPTIC
+South Shallow,K7,42.4188,-77.1985,,SYNOPTIC
+South Deep,K8,42.4188,-77.1985,,SYNOPTIC
+Eggleston Pt,K9,42.5488,-77.0986,,SYNOPTIC
+Willow Grove,K10,42.6117,-77.0761,,SYNOPTIC
+"Stone Pt, Pulteney",K11,42.5314,-77.15,,SYNOPTIC
+H\port Beach,K12,42.4098,-77.2175,,SYNOPTIC
+Central thermocline depth,K13,42.4925,-77.1503,,SYNOPTIC
+East thermocline depth,K14,42.5491,-77.1024,,SYNOPTIC
+West thermocline depth,K15,42.5594,-77.1458,,SYNOPTIC
+South thermocline depth,K16,42.4188,-77.1985,,

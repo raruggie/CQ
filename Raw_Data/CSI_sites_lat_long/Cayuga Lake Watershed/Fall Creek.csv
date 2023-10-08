@@ -1,0 +1,29 @@
+Name,Code,Latitude,Longitude,Miles from the mouth,Type
+Cayuga Street Bridge,FCCB,42.4547,-76.5004,0.681818,SYNOPTIC
+Fall Creek Forest Home,FCFH,42.453,-76.4702,2.98,SYNOPTIC
+Freese Road Bridge,FCFB,42.4569,-76.4387,3.69489,SYNOPTIC
+Dryden and Freeville Sewage Treatment Plant Outfall,FCOF,42.5061,-76.3555,11.0604,INVESTIGATIVE
+Fall Creek Freeville,FCF,42.505,-76.3595,11.861,SYNOPTIC
+McLean Rd.,FCMR,42.5438,-76.2971,19.03,SYNOPTIC
+Fall Creek Fire Department,FCFD,42.552336,-76.292714,19.8,SYNOPTIC
+McLean Bridge,UFCM,42.5526,-76.293,20.3625,SYNOPTIC
+Davis Road Bridge,UFCD,42.5735,-76.2963,22.3258,SYNOPTIC
+Elm Street,ELM,42.5862,-76.2903,23.3263,SYNOPTIC
+Lafayette Road,UFCL,42.5935,-76.2876,23.5989,SYNOPTIC
+Outfall Pipe by Cayuga Street Bridge,,42.4545,-76.5006,,INVESTIGATIVE
+Champlin Road Culvert,CRC,42.5755,-76.297,,INVESTIGATIVE
+Tillotson Road Culvert,TRC,42.5758,-76.303,,INVESTIGATIVE
+Trailer Park Upstream,,,,,
+Trailer Park Feeder,,42.5751,-76.2949,,INVESTIGATIVE
+Como Lake Outlet,CLO,42.663,-76.2863,,INVESTIGATIVE
+Farm Feeder,,42.574,-76.2959,,INVESTIGATIVE
+Lafayette Road Culvert,LRC,,,,INVESTIGATIVE
+Fall Creek - Freese Rd,,42.4579,-76.438,,BIOLOGICAL
+Fall Creek - Downstream of Lake St,,42.4533,-76.4957,,BIOLOGICAL
+Fall Creek - Upstream of Lake Street Bridge,,42.4532,-76.4941,,BIOLOGICAL
+"Fall Creek - 4-H Acres, upstream of 13",,42.471958,-76.418629,,BIOLOGICAL
+"Fall Creek - 4-H Acres, downstream of 13",,42.4700771,-76.42080417,,BIOLOGICAL
+Fall Creek - Freeville,,42.513889,-76.353389,,BIOLOGICAL
+Davis Tributary,,,,,
+Fall Creek - Rte 90 below Lake Como,,42.639681,-76.278677,,BIOLOGICAL
+Fall Creek - Cornell Botanic Gardens footbridge,,42.45518046,-76.45473081,,

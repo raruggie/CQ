@@ -6,6 +6,7 @@ gc()
 ####################### Load packages #######################
 
 library(climateR)
+library(geosphere)
 library(CropScapeR)
 library(FedData)
 library(streamstats)
@@ -30,6 +31,10 @@ library(tidyverse)
 sf_use_s2(TRUE) # for sf
 
 setTimeout(1000) # for streamstats api
+
+# geosphere functions return meters. If you want miles:
+
+meters_to_miles = 1/1609.334
 
 ####################### Functions #######################
 
@@ -81,6 +86,10 @@ mapview(map.DOW.TP_sites, zcol = 'agency_cd')
 
 # lets add to this map the NWIS TP sites: to do this
 
+# import the NWIS site map:
+
+load('C:/PhD/CQ/Processed_Data/map.NWIS.TP_sites.Rdata')
+
 # combine the two dataframes:
 
 map.NWIS_and_DOW.TP_sites<-bind_rows(map.DOW.TP_sites,map.NWIS.TP_sites)
@@ -92,98 +101,179 @@ mapview(map.NWIS_and_DOW.TP_sites, zcol = 'agency_cd')
 # looking at this map, maybe there are a hand full of potential useful sites in the DOW database
 # to include in the CQanalysis, but for the most part  I think the NWIS sites cover the same watersheds
 
-# I did pair up flow data when the sample threshold was 99. But at 20 I dont want to do it
-# since the workflow is by hand.
+# from this map, the following DOW sites stand out as different from the NWIS sites
+# and useful, meaning not in an urban setting:
 
-# below is the workflow I used when the threshold was at 99 samples:
+v.DOW.TP.sites_keep<-sort(c('02-ALGY-20.3','06-SUSQ-6.9', '12-ORSK-0.9', '12-MOHK-136.0', '11-UHUD-98.3', '11-UHUD-64.0', '06-NVUS-0.9', '09-CGAY-2.7', '14-DELA-1.3'))
 
-# filter the NYS NWIS sites to those with over 1000 flow days:
+# now looking at a map of just these sites:
 
-df.NWIS<-df.NWIS.Q%>%ungroup()%>%mutate(site_id = site_no, n = nflowdays)%>%
-  select(site_id, n,latitude, longitude, agency_cd)%>%
-  filter(n>1000)
-
-# merge the TP sites with its lat long metadata
-# also filter to sites with over 99 samples and bind rows with the NWIS sites 
-# and then plot:
-
-x<-left_join(df.temp,sms[,c(1,5,6)], by = 'site_id')%>%
-  mutate(agency_cd = 'DOW Sample')%>%
-  filter(n>20)%>%
-  # bind_rows(df.NWIS)%>%
+map.DOW.TP.sites_keep<-df.DOW_TP_sites%>%
+  filter(site_id %in% v.DOW.TP.sites_keep)%>%
   drop_na(latitude,longitude)%>%
-  st_as_sf(.,coords=c('longitude','latitude'), crs = 4326)%>%
-  mapview(., zcol = 'agency_cd')
+  st_as_sf(.,coords=c('longitude','latitude'), crs = 4326)
 
-# the following DOW-USUS site pairs:
+mapview(map.DOW.TP.sites_keep, zcol = 'agency_cd')
 
-# 07-OSWE-5.2 04249000
-# 
-# 08-BLCK-1.4 04260500 
-# 
-# 11-UHUD-64.0 01326500
-# 
-# 12-MOHK-1.5 	01357500 # this site looks potential for backwater from adjacent Husdon river to impact it.
-# 
-# 11-UHUD-2.7 01335754
-# 
-# 13-LHUD-120.2 01358000 # this gauge is quite far upstream from sample
-# 
-# 13-LHUD-66.3  01358000 # there isnt a gauge anywhere near here. Husdon river at green island is the last gauge.
-# 
-# 14-DELA-1.3 	01428500 # the gaue is also on the delware river butthe monguap flows into it before the sample locations IO think it might just be betterto use CBNTN sites if we aregoing to use delware data.
-# 
-# 06-NANG-0.7 01512500 # this sample site is right in binghamton urban area
-# 
-# 06-SUSQ-6.9 01513831
-# 
-# 01-BUFF-1.7 04214500 # caz creek flows in before sample site
-# 
-# 04-GENS-2.6 04232000 # proably would just use USGS sample data for gene river
-# 
-# 07-SEOS-22.4 04237496
+# I want USGS gauges within a radius of X miles of these sites from the master list of NYS gauges. To do this:
 
-# do any of these gauge sites show up in the NWIS analysis from above?
+# read in the NYS USGS gauges with daily flow:
 
-DOW_USGS_surrogates<-c('04249000','04260500','01326500','01357500','01335754','01358000','01358000','01428500','01512500','01513831','04214500','04232000','04237496')
+df.NWIS.Q_sites<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.Q_sites.csv")
 
-DOW_USGS_surrogates<-df.NWIS.TP_CQ%>%filter(site_no %in% DOW_USGS_surrogates)%>%
-  distinct(site_no)
+# determine all possible combinaitons of the USGS gauges and DOW locations: to do this 
 
-# four of these sites pop up.
-# lets look at them on the map:
+# establish the DOW keep dataframe:
 
-df.NWIS<-df.NWIS%>%filter(site_id %in% DOW_USGS_surrogates$site_no)
+df.DOW.TP.sites_keep<-df.DOW_TP_sites%>%
+  filter(site_id %in% v.DOW.TP.sites_keep)
 
-left_join(df.temp,sms[,c(1,5,6)], by = 'site_id')%>%
-  mutate(agency_cd = 'DOW Sample')%>%
-  filter(n>50)%>%
-  bind_rows(df.NWIS)%>%
-  drop_na(latitude,longitude)%>%
-  st_as_sf(.,coords=c('longitude','latitude'), crs = 4326)%>%
-  mapview(., zcol = 'agency_cd')
+# expand() is used here to create all posible combinaitons of the USGS gauges and the 7 CSI downstream sites:
+# then left join the lat longs of the CSI sites (already have the gauge lat longs)
 
-# these are pretty much all colocate, and the NWIS has more data
-# these will be filtered these out
+df.dist<- df.NWIS.Q_sites%>%
+  group_by(site_no, dec_lat_va, dec_long_va)%>%
+  expand(site_id = df.DOW.TP.sites_keep$site_id)%>%
+  left_join(.,df.DOW.TP.sites_keep, by = 'site_id')%>%
+  dplyr::select(c(1:4,6,7))%>%
+  arrange(site_id)
 
-char_vector<-c('07-OSWE-5.2', '04249000','08-BLCK-1.4','04260500',
-               '11-UHUD-64.0','01326500','12-MOHK-1.5','01357500',
-               '11-UHUD-2.7','01335754','13-LHUD-120.2','01358000',
-               '13-LHUD-66.3',  '01358000',
-               '14-DELA-1.3', 	'01428500' ,
-               '06-NANG-0.7', '01512500' ,
-               '06-SUSQ-6.9', '01513831',
-               '01-BUFF-1.7', '04214500' ,
-               '04-GENS-2.6', '04232000' ,
-               '07-SEOS-22.4', '04237496')
+# rename the columns:
 
-odd_elements <- char_vector[(1:length(char_vector)) %% 2 == 1]
-even_elements <- char_vector[(1:length(char_vector)) %% 2 == 0]
+names(df.dist)<-c("x.Site","x.Latitude","x.Longitude","y.Site","y.Latitude","y.Longitude")
 
-# Create a dataframe and filter the (nearly) colocated sites:
+# add a distance column (distance between every possible combinaiton of USGS gauge and CSI site) by calling distHaversine (vectorized) on each pair:
 
-df.DOW_TP_sites_metadata<-data.frame(DOW = odd_elements, Surrogate_Gauge = even_elements)%>%
-  filter(!Surrogate_Gauge %in% DOW_USGS_surrogates$site_no)
+df.dist$dist_meters <- geosphere::distHaversine(df.dist[3:2], df.dist[6:5]) # units of meters
+
+# find the sites within X miles using filter on the distance column:
+
+df.dist<-df.dist%>%
+  group_by(y.Site)%>%
+  filter(dist_meters < 50/meters_to_miles)%>%
+  ungroup()
+
+# create a df for mapping: to do this:
+
+# add ID columns:
+
+df.dist_for_map<-df.dist%>%
+  mutate(x.Type = 'USGS', .after = 3)%>%
+  mutate(y.Type = 'DOW', .after = 7)
+
+# remove the .x and .y from the col names (so rbind works)
+names(df.dist_for_map) <- substring(names(df.dist_for_map), 3)
+
+# use rbind to stack the USGS and OW sites and lat longs and type columns into one dataframe, then convert to sf df:
+
+map.DOW.Surro_gauges<-rbind(df.dist_for_map[1:4], df.dist_for_map[5:8])%>%
+  st_as_sf(.,coords=c('Longitude','Latitude'), crs = 4326)
+
+# map:
+
+mapview(map.DOW.Surro_gauges, zcol = 'Type')
+
+# going through by hand to find the best gauge for each site:
+# this is going to be hard because I dont know which gauges have the most flow data.
+
+# I can pair the flow data to the TP sample data and see which sites have the most numberof paired CQ observations:
+
+# filter the raw DOW TP data to the sites we are keeping and convert dates for later merging:
+
+df.DOW_TP.keep<-df.DOW_TP%>%filter(site_id %in% v.DOW.TP.sites_keep)%>%
+  mutate(sample_date_time = as.POSIXct(sample_date, format = '%m/%d/%Y, %I:%M %p'), .before = 2)%>%
+  mutate(sample_date = as.Date(sample_date_time))
+
+# merge to this data frame the df.dist results (with potential surrogate NWIS gauges paired to DOW sample sites):
+
+df.DOW_TP.keep<-left_join(df.DOW_TP.keep, df.dist, by = c('site_id'='y.Site'))
+
+# read in the raw flow data for NWIS sites:
+
+# df.NWIS_Q<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.Q.csv")
+
+# filter for the sites in df.dist and convert date to date:
+
+df.NWIS_Q.DOW<-df.NWIS_Q%>%
+  filter(site_no %in% unique(df.dist$x.Site))%>%
+  mutate(Date = as.Date(Date))
+
+# merge this dataframe with the DOW TP sample dataframe, which is possible because the potential surrogate gauges were added a few steps before: 
+
+df.DOW_TP.keep<-left_join(df.DOW_TP.keep, df.NWIS_Q.DOW, by = c('x.Site'='site_no', 'sample_date'='Date'))
+
+# now remove the NA in the added NWIS columns, which are where there was no flow data for the DOW sample, 
+# group by the DOW site and NWIS site (combinaiton of the two) and summarize to get the number paired CQ observations that would existif using that surrogate gauge for that DOW site
+# create a column using this n that is the ratio of the totalN for the site to the paired CQ n:
+
+df.DOW_TP.keep.summarized<-df.DOW_TP.keep%>%
+  drop_na(X_00060_00003)%>%
+  group_by(site_id, x.Site)%>%
+  summarise(Paired_CQ_n=n())%>%
+  arrange(site_id, desc(Paired_CQ_n))%>%
+  ungroup()%>%
+  left_join(.,df.DOW_TP_sites[,c(1,2)], by = 'site_id')%>%
+  mutate(Paired_CQ_n = Paired_CQ_n/n)
+
+# now plot this: to dothis:
+
+# create a mapping df for the NWIS sites in the above df:
+
+map.DOW_TP.keep.summarized<-df.DOW_TP.keep.summarized%>%
+  select(c(2,3))%>%
+  left_join(.,distinct(df.dist[,c(1:3)]), by = 'x.Site')%>%
+  st_as_sf(.,coords=c('x.Longitude','x.Latitude'), crs = 4326)
+
+# make a map (already have the DOW TPsample sites): to do this:
+
+# add 100 mile radius to these DOW points to see which sites are for it:
+
+dat_circles <- st_buffer(map.DOW.TP.sites_keep, dist = 50/meters_to_miles)
+
+# now map:
+
+mapview(map.DOW.TP.sites_keep, col.regions=list("darkred"))+mapview(dat_circles,col.regions=list("red"))+ mapview(map.DOW_TP.keep.summarized, zcol= 'Paired_CQ_n')
+
+# it looks like at 50 miles, each DOW site has a gauge with an actualpaired to potential total paired CQ ratio of 1
+# however, it is possible that a yellow (ratio = 1) in the plot above is not for the site even if it is in its radius since radi can overlap
+# but we cancheck to make sure that each DOW site is represented after filtering the df to that with a ratio of 1:
+
+df.DOW_TP.keep.summarized.final<-df.DOW_TP.keep.summarized%>%filter(Paired_CQ_n==1)
+
+unique(df.DOW_TP.keep.summarized.final$site_id)
+
+# all 9 sites are represented, mean each one has a surogate gauge with a ratio of 1!
+
+# and now relook at the map but in the pltting df keep the DOW site_id to align them:
+
+map.DOW_TP.keep.summarized.final<-df.DOW_TP.keep.summarized.final%>%
+  select(c(1,2))%>%
+  left_join(.,distinct(df.dist[,c(1:3)]), by = 'x.Site')%>%
+  st_as_sf(.,coords=c('x.Longitude','x.Latitude'), crs = 4326)
+
+mapview(map.DOW.TP.sites_keep, zcol = 'site_id')+
+  mapview(dat_circles, col.regions=list("red"), alpha.regions = 0.2)+
+  mapview(map.DOW_TP.keep.summarized.final, zcol= 'site_id')
+
+# from this map the best USGS gauges for the sites in the order are:
+
+v.DOW.TP.sites_surro<-sort(c("02-ALGY-20.3:4213500", '06-SUSQ-6.9:1531000','14-DELA-1.3:1421000',"06-NVUS-0.9:1421618", "12-MOHK-136.0:4250200", "12-ORSK-0.9:1349150", "11-UHUD-98.3:1327750", "11-UHUD-64.0:1327750", "09-CGAY-2.7:4269000"))
+
+# transform this vector in a df:
+
+df.DOW.TP.sites_surro<-data.frame(do.call(rbind, strsplit(v.DOW.TP.sites_surro, ":", fixed=TRUE)))%>%
+  rename(site_id = 1, site_no = 2)
+
+# the good thing now is that I have the paired CQ data!
+
+
+save.image(file = 'C:/PhD/CQ/Processed_Data/DOW.Rdata')
+
+
+
+
+
+
 
 # now download the raw flow data for these gauges:
 

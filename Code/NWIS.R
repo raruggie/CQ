@@ -304,10 +304,11 @@ map.NWIS.TP_sites<-df.NWIS.TP_site_metadata%>%
 
 # mapview(map.NWIS.TP_sites)
 
+# save(map.NWIS.TP_sites, file = 'C:/PhD/CQ/Processed_Data/map.NWIS.TP_sites.Rdata')
 
 # finally save image to workspace:
 
-save.image(file = 'C:/PhD/CQ/Processed_Data/NWIS.Rdata')
+# save.image(file = 'C:/PhD/CQ/Processed_Data/NWIS.Rdata')
 
 
 

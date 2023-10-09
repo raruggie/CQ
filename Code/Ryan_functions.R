@@ -111,11 +111,13 @@ Delineate <- function(long, lat) {
   return(out)
 }
 
-fun.l.SS_WS.to.sfdf<-function(list_of_SS_WS, names_of_WS){
+fun.l.SS_WS.to.sfdf<-function(list_of_SS_WS){
+  
+  list_of_SS_WS<-list_of_SS_WS[sapply(list_of_SS_WS, function(x) class(x) == "watershed")]
   
   l.sp<-list_of_SS_WS
   
-  for (i in seq_along(list_of_SS_WS)){
+  for (i in seq_along(l.sp)){
     
     tryCatch({
       
@@ -127,7 +129,7 @@ fun.l.SS_WS.to.sfdf<-function(list_of_SS_WS, names_of_WS){
   
   # set the names of the list:
   
-  names(l.sp)<-names_of_WS
+  names(l.sp)<-names(list_of_SS_WS)
   
   # need to remove the drainage areas that did not work in toSp (nothing we can do about losing these, idk why some dont come out of the function right):
   

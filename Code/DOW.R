@@ -189,7 +189,11 @@ df.DOW_TP.keep<-df.DOW_TP%>%filter(site_id %in% v.DOW.TP.sites_keep)%>%
 
 df.DOW_TP.Surro<-left_join(df.DOW_TP.keep, df.dist, by = c('site_id'='y.Site'))
 
-# read in the raw flow data for NWIS sites:
+# download the raw flow data for NWIS sites:
+# this is major. There are over 2000 sites in NYS with daily flow data
+# there are also over 1000 sites within the 50 mile radius for these DOW sites
+# This does notseems worth it. 
+# instead I am just going to use the rawdaily flow data i have forthe TP sites (it ended up working out to give some result here, meaning Ifound a surrogate gauge within 50 miles. But maybe if I had the raw daily flow data for all of the 2000 plus NWIS sites, I could find much better gauges)
 
 df.NWIS_Q<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.Q.csv", colClasses = c(site_no = "character"))
 
@@ -322,184 +326,14 @@ df.DOW_TP.keep.final<-left_join(df.DOW_TP.keep.final, temp, by = c("x.Site"="sit
 
 # now I have CQ curves and SS metadata
 
-# because I dont trust the delinations, I am going to wait to use them to get land use 
-
-
-# save.image(file = 'C:/PhD/CQ/Processed_Data/DOW.Rdata')
-
-
-
-
-
-
-
-# now download the raw flow data for these gauges:
-
-df.DOW_surro_Qs<-readNWISdv(siteNumbers = df.DOW_TP_sites_metadata$Surrogate_Gauge, parameterCd = '00060')
-
-# then download the metadata as to get their drainage areas
-
-df.DOW_surro_Qs_metadata<-readNWISsite(siteNumbers = df.DOW_TP_sites_metadata$Surrogate_Gauge)
-
-# then left join with the DOW site name and convert from mi to km2:
-
-df.DOW_TP_sites_metadata<-left_join(df.DOW_TP_sites_metadata, df.DOW_surro_Qs_metadata[,c(2,30)], by = c('Surrogate_Gauge'='site_no'))%>%
-  rename(Surrogate_DA = 3)%>%
-  mutate(Surrogate_DA=Surrogate_DA*2.58999)
-
-# then delinate the drainage areas of the sampling sites to get their drianage areas:
-
-# first add the lat longs to the metadata df:
-
-df.DOW_TP_sites_metadata<-left_join(df.DOW_TP_sites_metadata,sms[,c(1,5,6)],by = c('DOW'='site_id') )
-
-# next delinate using lapply to get into list
-
-l.sf.SS_WS.DOW_TP_sites[[2]]<-x
-
-l.SS_WS.DOW_TP_sites<-lapply(seq_along(df.DOW_TP_sites_metadata$latitude), \(i) Ryan_delineate(df.DOW_TP_sites_metadata$longitude[i],df.DOW_TP_sites_metadata$latitude[i]))
-
-# then convert out of watershed to spatial polygons df: need to use a loop because toSp function doesnt work always with lapply
-
-l.sp.SS_WS.DOW_TP_sites<-l.SS_WS.DOW_TP_sites
-
-for (i in seq_along(l.sp.SS_WS.DOW_TP_sites)){
+# plots of CQ curves:
   
-  tryCatch({
-    
-    l.sp.SS_WS.DOW_TP_sites[[i]]<-toSp(watershed = l.sp.SS_WS.DOW_TP_sites[[i]], what = 'boundary')
-    
-  },error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
-  
-}
-
-# first set the names of the list:
-
-names(l.sp.SS_WS.DOW_TP_sites)<-df.DOW_TP_sites_metadata$DOW
-
-# need to remove the drainage areas that did not work in toSp (nothing we can do about losing these, idk why some dont come out of the function right):
-
-l.sp.SS_WS.DOW_TP_sites<-l.sp.SS_WS.DOW_TP_sites[!sapply(l.sp.SS_WS.DOW_TP_sites, function(x) class(x) == "watershed")]
-
-# convert from sp (old gis in r) to sf (new gis in r)
-
-l.sf.SS_WS.DOW_TP_sites<-lapply(l.sp.SS_WS.DOW_TP_sites, st_as_sf)
-
-# check validity of sf objects and then make valid:
-
-lapply(l.sf.SS_WS.DOW_TP_sites, st_is_valid)
-
-l.sf.SS_WS.DOW_TP_sites<-lapply(l.sf.SS_WS.DOW_TP_sites, st_make_valid)
-
-# need to convert the Shape_Area column to numeric for all dfsin the list or bind_rows wont work:
-
-l.sf.SS_WS.DOW_TP_sites<-lapply(l.sf.SS_WS.DOW_TP_sites, \(i) i%>%mutate(Shape_Area = as.numeric(Shape_Area)))
-
-# create a single sf df with all the sample site draiange areas:
-
-df.sf.DOW_TP_sites<-bind_rows(l.sf.SS_WS.DOW_TP_sites, .id = 'Name')%>%
-  relocate(Name, .before= 1)
-
-# look at a map of the watersheds:
-
-mapview(df.sf.DOW_TP_sites, zcol = 'Name')
-
-# the two hudon river ones didnt work
-# I tried delinating them a second time but still gives zeros in the watershed attributes columns
-
-# convert to vect and add a drainage area in km2 column
-
-vect.DOW_TP_sites<-vect(df.sf.DOW_TP_sites)
-
-vect.DOW_TP_sites$area_KM2<-expanse(vect.DOW_TP_sites, unit="km")
-
-# create a temp dataframe of the DOW site names and the draiange areas out of the SpatVect object:
-
-temp<-as.data.frame(vect.DOW_TP_sites[,c('Name', 'area_KM2')])
-
-# now merge these drainage area calcs with metadata df:
-# and calcuate the DA ratios:
-
-df.DOW_TP_sites_metadata<-left_join(df.DOW_TP_sites_metadata, temp, by = c('DOW'='Name'))%>%
-  rename(DOW_DA = 6)%>%
-  mutate(DA_ratio = DOW_DA/Surrogate_DA)
-
-df.DOW_TP_sites_metadata<-df.DOW_TP_sites_metadata%>%
-  mutate(DA_ratio = DOW_DA/Surrogate_DA)
-
-# I want to look at the drainage areas of the gauges these to make sure they are right:
-
-temp<-lapply(seq_along(df.DOW_surro_Qs_metadata$dec_lat_va), \(i) Ryan_delineate(df.DOW_surro_Qs_metadata$dec_long_va[i], df.DOW_surro_Qs_metadata$dec_lat_va[i]))
-
-for (i in seq_along(temp)){
-  
-  tryCatch({
-    
-    temp[[i]]<-toSp(watershed = temp[[i]], what = 'boundary')
-    
-  },error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
-  
-}
-
-# first set the names of the list:
-
-names(temp)<-df.DOW_TP_sites_metadata$Surrogate_Gauge
-
-# need to remove the drainage areas that did not work in toSp (nothing we can do about losing these, idk why some dont come out of the function right):
-
-temp<-temp[!sapply(temp, function(x) class(x) == "watershed")]
-
-# convert from sp (old gis in r) to sf (new gis in r)
-
-temp<-lapply(temp, st_as_sf)
-
-# check validity of sf objects and then make valid:
-
-lapply(temp, st_is_valid)
-
-temp<-lapply(temp, st_make_valid)
-
-# need to convert the Shape_Area column to numeric for all dfsin the list or bind_rows wont work:
-
-temp<-lapply(temp, \(i) i%>%mutate(Shape_Area = as.numeric(Shape_Area)))
-
-# create a single sf df with all the sample site draiange areas:
-temp<-bind_rows(temp, .id = 'Name')%>%
-  relocate(Name, .before= 1)
-
-# look at a map of the watersheds:
-
-mapview(df.sf.DOW_TP_sites, zcol = 'Name')+mapview(temp, zcol = 'Name')
-
-# they look fine (fyi some didnt show up, but the others check out so i think its ok)
-
-# next pair up the flows to TP observations and scale the flows:
-
-# Steps to do this:
-# filter the DOW_TP obsevations to the sites detemrined above (have over 50 samples)
-# convert dattime to POSIXct and create a column for just the date
-# left join to add the surrogate gauge data and DA ratio
-# left join to add the flow data by site and date
-# rename the surrogate gauge flow column name and calcute the scaled flows by multiplying by the DA_ratio
-# remove sites/observations where flow and TP didnt fall on same date:
-
-df.DOW_TP_CQ<-df.DOW_TP%>%
-  filter(site_id %in% df.DOW_TP_sites_metadata$DOW)%>%
-  mutate(sample_date = as.POSIXct(sample_date, format = '%m/%d/%Y, %I:%M %p'))%>%
-  mutate(Date = as.Date(sample_date), .after = 2)%>%
-  left_join(., df.DOW_TP_sites_metadata, by = c('site_id'='DOW'))%>%
-  left_join(., df.DOW_surro_Qs[,c(2:4)], by = c('Surrogate_Gauge'='site_no', 'Date'='Date'))%>%
-  rename(Surrogate_Gauge_Flow = X_00060_00003)%>%
-  mutate(Q_DA_scaled = Surrogate_Gauge_Flow*DA_ratio)%>%
-  drop_na(Q_DA_scaled)%>%
-  filter(Q_DA_scaled>0)
-
-# now make plots of CQ curves:
-
-ggplot(df.DOW_TP_CQ, aes(x = log(Q_DA_scaled), y = log(result_value)))+
+ggplot(df.DOW_TP.keep.final, aes(x = log(Q_scaled), y = log(result_value)))+
   geom_point()+
   geom_smooth(method = 'lm')+
   facet_wrap(dplyr::vars(site_id), scales = 'free')
 
-# Done! The df df.DOW_TP_sites_metadata serves as the CQ and metadata dfs
-# since it has the lat longs for each site
+# because I dont trust the delinations, I am going to wait to use them to get land use, elevation, climate predictors 
+
+# save.image(file = 'C:/PhD/CQ/Processed_Data/DOW.Rdata')
+

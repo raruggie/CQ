@@ -39,8 +39,6 @@ source("C:/PhD/CQ/Code/Ryan_functions.R")
 
 # Process the CSI database for the CQ analysis
 
-####################### Workflow #######################
-
 # Like DOW, flow data will need to be paired up for the CSI sampling sites
 # however, there are only two watersheds. 
 
@@ -56,13 +54,11 @@ source("C:/PhD/CQ/Code/Ryan_functions.R")
 
 # the code is adapted from C:/PhD/Research/Code/Data_Inventory/Query_and_export_CSI_data.R
 
-# Read in Raw CSI data downloaded from their website and saved as csv: to do this:
-
-setwd("C:/PhD/Research/Data/Data_inventory/CSI")
+####################### Workflow #######################
 
 # import the raw C data as a csv:
 
-df.CSI<-read.csv("CSI-all_monitoring_regions.csv")
+df.CSI<-read.csv("C:/PhD/CQ/Raw_Data/CSI-all_monitoring_regions.csv")
 
 # format the dataframe: to do this:
 
@@ -176,7 +172,7 @@ df.CSI_TP<-df.CSI%>%
 # note that there were a few sites that I could not get the lat longs for (see above loop)
 # note that the lat longs were added to the the CSI WQ data download using another code called C:\PhD\CSI\Code\CSI_sites.R
 
-# find unique sites that have lat and long data and have over 50 samples 
+# find unique sites that have lat and long data and have over X samples 
 
 df.CSI_TP_sites<-df.CSI_TP%>%
   filter_at(vars(Latitude, Longitude),all_vars(!is.na(.)))%>%
@@ -205,13 +201,9 @@ mapview(map.CSI.TP_sites, zcol = 'Monitoring.Set')
 
 # To do this:
 
-# find the start date for flow that I need
+# read in the NYS gauge data and reformt dataframe:
 
-sDt<-as.character(min(df.CSI_TP_sites$min_date))
-
-# download NYS USGS flow gauges with data going back this far, and reformat the resulting dataframe of just site and lat long for use in df_dist workflow:
-
-df.CSI.Surro_gauges<-whatNWISsites(statecode = 'NY', parameterCd="00060", startDt=sDt)%>%
+df.NWIS.Q_sites<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.Q_sites.csv", colClasses = c(site_no = "character"))%>%
   mutate(Site = paste(site_no, station_nm), .before = 1)%>%
   dplyr::select(c(1,3,4,6,7))%>%
   rename(Latitude = dec_lat_va, Longitude = dec_long_va)
@@ -239,7 +231,7 @@ CSI_keep<-CSI_keep%>%rename(x.Site = ID)
 # expand() is used here to create all posible combinaitons of the USGS gauges and the 7 CSI downstream sites:
 # then left join the lat longs of the CSI sites (already have the gauge lat longs)
 
-df.dist<- df.CSI.Surro_gauges%>%
+df.dist<- df.NWIS.Q_sites%>%
   group_by(Site, Latitude, Longitude)%>%
   expand(x.Site = CSI_keep$x.Site)%>%
   left_join(.,CSI_keep, by = 'x.Site')%>%
@@ -258,24 +250,23 @@ df.dist$dist_meters <- geosphere::distHaversine(df.dist[3:2], df.dist[6:5]) # un
 
 df.dist<-df.dist%>%
   group_by(x.Site)%>%
-  mutate(closest = min(dist_meters))%>%
+  mutate(closest = min(dist_meters, na.rm=T))%>%
   filter(closest == dist_meters)
 
 # there are 7 CSI sites and 4 gauges
 
 # add the USGS gauge site_no to the df.dist:
 
-df.dist<-left_join(df.dist, df.CSI.Surro_gauges[,1:2], by = c('y.Site'='Site'))
+df.dist<-left_join(df.dist, distinct(df.NWIS.Q_sites[,1:2]), by = c('y.Site'='Site'))
 
-# get the unique sites from this df:
+# download the raw daily flow data for these sites: (cant use the import of downloaded daily flowdata from NWIS.R becausethose sites were filtered for TP samples...)
 
-x<-unique(df.dist$site_no)
+df.CSI.Surro_gauges_Q<-readNWISdv(siteNumbers =  unique(df.dist$site_no), parameterCd =  '00060',statCd =  '00003')
 
-# download the raw daily flow data for these sites:
-
-df.CSI.Surro_gauges_Q<-readNWISdv(x, '00060')
+# goes quick so not saving the output
 
 # pair these flows up with the sample data:
+
 # first need to merge the monitoring and set back into df.dist:
 
 df.dist<-left_join(df.dist, df.CSI_TP_sites[,2:4], by = c('x.Site'='ID'))
@@ -335,46 +326,11 @@ df.CSI_TP<-df.CSI_TP%>%
 
 # delinate the the CSI sites: I dont need all ofthem right now but might as well do all of them
 
-l.SS_WS.CSI_TP<-lapply(seq_along(df.CSI_TP_sites$ID), \(i) Ryan_delineate(df.CSI_TP_sites$Longitude[i], df.CSI_TP_sites$Latitude[i]))
+l.SS_WS.CSI_TP<-lapply(seq_along(df.CSI_TP_sites$ID), \(i) Delineate(df.CSI_TP_sites$Longitude[i], df.CSI_TP_sites$Latitude[i]))
 
-l.sp.SS_WS.CSI_TP<-l.SS_WS.CSI_TP
+df.sf.CSI_TP<-fun.l.SS_WS.to.sfdf(l.SS_WS.CSI_TP, df.CSI_TP_sites$ID)
 
-for (i in seq_along(l.sp.SS_WS.CSI_TP)){
-  
-  tryCatch({
-    
-    l.sp.SS_WS.CSI_TP[[i]]<-toSp(watershed = l.sp.SS_WS.CSI_TP[[i]], what = 'boundary')
-    
-  },error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
-  
-}
-
-# set the names of the list:
-
-names(l.sp.SS_WS.CSI_TP)<-df.CSI_TP_sites$ID
-
-# need to remove the drainage areas that did not work in toSp (nothing we can do about losing these, idk why some dont come out of the function right):
-
-l.sp.SS_WS.CSI_TP<-l.sp.SS_WS.CSI_TP[sapply(l.sp.SS_WS.CSI_TP, function(x) class(x) == "SpatialPolygonsDataFrame")]
-
-# convert from sp (old gis in r) to sf (new gis in r)
-
-l.sf.SS_WS.CSI_TP<-lapply(l.sp.SS_WS.CSI_TP, st_as_sf)
-
-# check validity of sf objects and then make valid:
-
-lapply(l.sf.SS_WS.CSI_TP, st_is_valid)
-
-l.sf.SS_WS.CSI_TP<-lapply(l.sf.SS_WS.CSI_TP, st_make_valid)
-
-# need to convert the Shape_Area column to numeric for all dfsin the list or bind_rows wont work:
-
-l.sf.SS_WS.CSI_TP<-lapply(l.sf.SS_WS.CSI_TP, \(i) i%>%mutate(Shape_Area = as.numeric(Shape_Area)))
-
-# create a single sf df with all the sample site draiange areas:
-
-df.sf.CSI_TP<-bind_rows(l.sf.SS_WS.CSI_TP, .id = 'Name')%>%
-  relocate(Name, .before= 1)
+save(df.sf.CSI_TP, file = 'C:/PhD/CQ/Processed_Data/df.sf.CSI_TP.Rdata')
 
 # convert to vect and add a drainage area in km2 column
 

@@ -70,7 +70,7 @@ elapsed_months <- function(end_date, start_date) {
   12 * (ed$year - sd$year) + (ed$mon - sd$mon)
 }
 
-Ryan_delineate <- function(long, lat) {
+Delineate <- function(long, lat) {
   out <- tryCatch(
     {
       # Just to highlight: if you want to use more than one 
@@ -109,6 +109,48 @@ Ryan_delineate <- function(long, lat) {
     }
   )    
   return(out)
+}
+
+fun.l.SS_WS.to.sfdf<-function(list_of_SS_WS, names_of_WS){
+  
+  l.sp<-list_of_SS_WS
+  
+  for (i in seq_along(list_of_SS_WS)){
+    
+    tryCatch({
+      
+      l.sp[[i]]<-toSp(watershed = l.sp[[i]], what = 'boundary')
+      
+    },error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+    
+  }
+  
+  # set the names of the list:
+  
+  names(l.sp)<-names_of_WS
+  
+  # need to remove the drainage areas that did not work in toSp (nothing we can do about losing these, idk why some dont come out of the function right):
+  
+  l.sp<-l.sp[!sapply(l.sp, function(x) class(x) == "watershed")]
+  
+  # convert from sp (old gis in r) to sf (new gis in r)
+  
+  l.sf<-lapply(l.sp, st_as_sf)
+  
+  # make valid:
+  
+  l.sf<-lapply(l.sf, st_make_valid)
+  
+  # need to convert the Shape_Area column to numeric for all dfsin the list or bind_rows wont work:
+  
+  l.sf<-lapply(l.sf, \(i) i%>%mutate(Shape_Area = as.numeric(Shape_Area)))
+  
+  # create a single sf df with all the sample site draiange areas:
+  
+  df.sf<-bind_rows(l.sf, .id = 'Name')%>%
+    relocate(Name, .before= 1)
+  
+  return(df.sf)
 }
 
 Ryan_toSp <- function(DA) {

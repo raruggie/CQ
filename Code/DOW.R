@@ -119,7 +119,7 @@ mapview(map.DOW.TP.sites_keep, zcol = 'agency_cd')
 
 # read in the NYS USGS gauges with daily flow:
 
-df.NWIS.Q_sites<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.Q_sites.csv")
+df.NWIS.Q_sites<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.Q_sites.csv", colClasses = c(site_no = "character"))
 
 # determine all possible combinaitons of the USGS gauges and DOW locations: to do this 
 
@@ -146,12 +146,13 @@ names(df.dist)<-c("x.Site","x.Latitude","x.Longitude","y.Site","y.Latitude","y.L
 
 df.dist$dist_meters <- geosphere::distHaversine(df.dist[3:2], df.dist[6:5]) # units of meters
 
-# find the sites within X miles using filter on the distance column:
+# find the sites within X miles using filter on the distance column. Also make the usgs site_no character:
 
 df.dist<-df.dist%>%
   group_by(y.Site)%>%
   filter(dist_meters < 50/meters_to_miles)%>%
-  ungroup()
+  ungroup()%>%
+  mutate(x.Site = as.character(x.Site))
 
 # create a df for mapping: to do this:
 
@@ -186,27 +187,27 @@ df.DOW_TP.keep<-df.DOW_TP%>%filter(site_id %in% v.DOW.TP.sites_keep)%>%
 
 # merge to this data frame the df.dist results (with potential surrogate NWIS gauges paired to DOW sample sites):
 
-df.DOW_TP.keep<-left_join(df.DOW_TP.keep, df.dist, by = c('site_id'='y.Site'))
+df.DOW_TP.Surro<-left_join(df.DOW_TP.keep, df.dist, by = c('site_id'='y.Site'))
 
 # read in the raw flow data for NWIS sites:
 
-# df.NWIS_Q<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.Q.csv")
+df.NWIS_Q<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.Q.csv", colClasses = c(site_no = "character"))
 
-# filter for the sites in df.dist and convert date to date:
+# filter flowdata for the sites in df.dist and convert date to date (takes a minute with a 50 mile radius). Also change site_no to character:
 
 df.NWIS_Q.DOW<-df.NWIS_Q%>%
   filter(site_no %in% unique(df.dist$x.Site))%>%
-  mutate(Date = as.Date(Date))
+  mutate(Date = as.Date(Date), site_no = as.character(site_no))
 
 # merge this dataframe with the DOW TP sample dataframe, which is possible because the potential surrogate gauges were added a few steps before: 
 
-df.DOW_TP.keep<-left_join(df.DOW_TP.keep, df.NWIS_Q.DOW, by = c('x.Site'='site_no', 'sample_date'='Date'))
+df.DOW_TP.Surro<-left_join(df.DOW_TP.Surro, df.NWIS_Q.DOW, by = c('x.Site'='site_no', 'sample_date'='Date'))
 
 # now remove the NA in the added NWIS columns, which are where there was no flow data for the DOW sample, 
 # group by the DOW site and NWIS site (combinaiton of the two) and summarize to get the number paired CQ observations that would existif using that surrogate gauge for that DOW site
 # create a column using this n that is the ratio of the totalN for the site to the paired CQ n:
 
-df.DOW_TP.keep.summarized<-df.DOW_TP.keep%>%
+df.DOW_TP.Surro.summarized<-df.DOW_TP.Surro%>%
   drop_na(X_00060_00003)%>%
   group_by(site_id, x.Site)%>%
   summarise(Paired_CQ_n=n())%>%
@@ -219,7 +220,7 @@ df.DOW_TP.keep.summarized<-df.DOW_TP.keep%>%
 
 # create a mapping df for the NWIS sites in the above df:
 
-map.DOW_TP.keep.summarized<-df.DOW_TP.keep.summarized%>%
+map.DOW_TP.Surro.summarized<-df.DOW_TP.Surro.summarized%>%
   select(c(2,3))%>%
   left_join(.,distinct(df.dist[,c(1:3)]), by = 'x.Site')%>%
   st_as_sf(.,coords=c('x.Longitude','x.Latitude'), crs = 4326)
@@ -228,46 +229,103 @@ map.DOW_TP.keep.summarized<-df.DOW_TP.keep.summarized%>%
 
 # add 100 mile radius to these DOW points to see which sites are for it:
 
-dat_circles <- st_buffer(map.DOW.TP.sites_keep, dist = 50/meters_to_miles)
+dat_circles <- st_buffer(map.DOW_TP.Surro.summarized, dist = 50/meters_to_miles)
 
 # now map:
 
-mapview(map.DOW.TP.sites_keep, col.regions=list("darkred"))+mapview(dat_circles,col.regions=list("red"))+ mapview(map.DOW_TP.keep.summarized, zcol= 'Paired_CQ_n')
+mapview(map.DOW.TP.sites_keep, col.regions=list("darkred"))+mapview(dat_circles,col.regions=list("red"))+ mapview(map.DOW_TP.Surro.summarized, zcol= 'Paired_CQ_n')
 
-# it looks like at 50 miles, each DOW site has a gauge with an actualpaired to potential total paired CQ ratio of 1
+# it looks like at 50 miles, each DOW site has a gauge with an actual paired to potential total paired CQ ratio of 1
 # however, it is possible that a yellow (ratio = 1) in the plot above is not for the site even if it is in its radius since radi can overlap
 # but we cancheck to make sure that each DOW site is represented after filtering the df to that with a ratio of 1:
 
-df.DOW_TP.keep.summarized.final<-df.DOW_TP.keep.summarized%>%filter(Paired_CQ_n==1)
+df.DOW_TP.Surro.summarized.final<-df.DOW_TP.Surro.summarized%>%filter(Paired_CQ_n==1)
 
-unique(df.DOW_TP.keep.summarized.final$site_id)
+unique(df.DOW_TP.Surro.summarized.final$site_id)
 
 # all 9 sites are represented, mean each one has a surogate gauge with a ratio of 1!
 
 # and now relook at the map but in the pltting df keep the DOW site_id to align them:
 
-map.DOW_TP.keep.summarized.final<-df.DOW_TP.keep.summarized.final%>%
+# create map variable:
+
+map.DOW_TP.Surro.summarized.final<-df.DOW_TP.Surro.summarized.final%>%
   select(c(1,2))%>%
   left_join(.,distinct(df.dist[,c(1:3)]), by = 'x.Site')%>%
   st_as_sf(.,coords=c('x.Longitude','x.Latitude'), crs = 4326)
 
+# put map together:
+
 mapview(map.DOW.TP.sites_keep, zcol = 'site_id')+
   mapview(dat_circles, col.regions=list("red"), alpha.regions = 0.2)+
-  mapview(map.DOW_TP.keep.summarized.final, zcol= 'site_id')
+  mapview(map.DOW_TP.Surro.summarized.final, zcol= 'site_id')
 
 # from this map the best USGS gauges for the sites in the order are:
 
-v.DOW.TP.sites_surro<-sort(c("02-ALGY-20.3:4213500", '06-SUSQ-6.9:1531000','14-DELA-1.3:1421000',"06-NVUS-0.9:1421618", "12-MOHK-136.0:4250200", "12-ORSK-0.9:1349150", "11-UHUD-98.3:1327750", "11-UHUD-64.0:1327750", "09-CGAY-2.7:4269000"))
+v.DOW.TP.sites_surro<-sort(c("02-ALGY-20.3:04213500", '06-SUSQ-6.9:01531000','14-DELA-1.3:01421000',"06-NVUS-0.9:01421618", "12-MOHK-136.0:04250200", "12-ORSK-0.9:01349150", "11-UHUD-98.3:01327750", "11-UHUD-64.0:01327750", "09-CGAY-2.7:04269000"))
 
 # transform this vector in a df:
 
 df.DOW.TP.sites_surro<-data.frame(do.call(rbind, strsplit(v.DOW.TP.sites_surro, ":", fixed=TRUE)))%>%
-  rename(site_id = 1, site_no = 2)
+  rename(site_id = 1, site_no_keep = 2)
 
-# the good thing now is that I have the paired CQ data!
+# filter down df.DOW_TP.keep to just the CQ paired observations. To do this:
+
+# merge the chosen surrogate gauge name to each DOW observation, then filter where the gauge observations are:
+
+df.DOW_TP.keep.final<-df.DOW_TP.Surro%>%
+  left_join(., df.DOW.TP.sites_surro, by = 'site_id')%>%
+  filter(x.Site == site_no_keep)
+
+# now add in columns to draiange area scale surrogate flows: to do this:
+
+# create a df of the unique DOW sites
+
+temp<-df.DOW_TP_sites%>%
+  filter(site_id %in% v.DOW.TP.sites_keep)
+
+# delinate the DOW sites and convert to sf unsing functions (sourced):
+
+l.SS_WS.DOW<-lapply(seq_along(temp$site_id), \(i) Delineate(temp$longitude[i], temp$latitude[i]))
+
+df.sf.DOW.DA<-fun.l.SS_WS.to.sfdf(l.SS_WS.DOW,temp$site_id)
+
+# look at a map of the watersheds:
+
+mapview(df.sf.DOW.DA, zcol = 'Name')
+
+# convert to vect and add a drainage area in km2 column
+
+vect.DOW<-vect(df.sf.DOW.DA)
+
+vect.DOW$area_KM2<-expanse(vect.DOW, unit="km")
+
+# add DA in sqmi to raw TP data: to do this:
+
+# add it to temp so that you have unique sample location to its DA:
+
+temp$DA_sqmi<-vect.DOW$area_KM2*0.386102
+
+# now merge with raw TP data:
+
+df.DOW_TP.keep.final<-left_join(df.DOW_TP.keep.final, temp[,c(1,6)], by = 'site_id')
+
+# now get the surrogate drainage areas:
+
+temp<-readNWISsite(unique(df.DOW_TP.keep.final$x.Site))[,c(2,30)]
+
+# merge the DA with the raw TP data, calcuate the DA ratio, and scale the flows:
+
+df.DOW_TP.keep.final<-left_join(df.DOW_TP.keep.final, temp, by = c("x.Site"="site_no"))%>%
+  mutate(DA_ratio=DA_sqmi/drain_area_va)%>%
+  mutate(Q_scaled = X_00060_00003*DA_ratio)
+
+# now I have CQ curves and SS metadata
+
+# because I dont trust the delinations, I am going to wait to use them to get land use 
 
 
-save.image(file = 'C:/PhD/CQ/Processed_Data/DOW.Rdata')
+# save.image(file = 'C:/PhD/CQ/Processed_Data/DOW.Rdata')
 
 
 

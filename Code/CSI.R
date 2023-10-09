@@ -324,13 +324,32 @@ df.CSI_TP<-df.CSI_TP%>%
 
 # now scale these surrogate gauge flows using the DA of the site. To do this:
 
-# delinate the the CSI sites: I dont need all ofthem right now but might as well do all of them
+# delinate the the CSI sites: I dont need all ofthem right now but might as well do all of them. to do this: using two functions (sourced):
+
+# download the SS_WS:
 
 l.SS_WS.CSI_TP<-lapply(seq_along(df.CSI_TP_sites$ID), \(i) Delineate(df.CSI_TP_sites$Longitude[i], df.CSI_TP_sites$Latitude[i]))
 
-df.sf.CSI_TP<-fun.l.SS_WS.to.sfdf(l.SS_WS.CSI_TP, df.CSI_TP_sites$ID)
+names(l.SS_WS.CSI_TP)<-df.CSI_TP_sites$ID
+
+# save(l.SS_WS.CSI_TP, file = 'C:/PhD/CQ/Processed_Data/l.SS_WS.CSI_TP.Rdata')
+
+# convert into sf df:
+
+df.sf.CSI_TP<-fun.l.SS_WS.to.sfdf(l.SS_WS.CSI_TP)
 
 save(df.sf.CSI_TP, file = 'C:/PhD/CQ/Processed_Data/df.sf.CSI_TP.Rdata')
+
+save.image(file = 'C:/PhD/CQ/Processed_Data/CSI.Rdata')
+
+
+# left off
+
+
+
+
+
+
 
 # convert to vect and add a drainage area in km2 column
 

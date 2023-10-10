@@ -335,5 +335,15 @@ ggplot(df.DOW_TP.keep.final, aes(x = log(Q_scaled), y = log(result_value)))+
 
 # because I dont trust the delinations, I am going to wait to use them to get land use, elevation, climate predictors 
 
+
+
 # save.image(file = 'C:/PhD/CQ/Processed_Data/DOW.Rdata')
+
+load('C:/PhD/CQ/Processed_Data/DOW.Rdata')
+
+
+
+
+
+
 

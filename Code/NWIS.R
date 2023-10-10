@@ -78,14 +78,6 @@ df.NWIS.TP_sites<-fun.df.Pair_consit_flow('00665', df.NWIS.Q_sites, n_samples = 
 
 write.csv(df.NWIS.TP_sites, "C:/PhD/CQ/Raw_Data/df.NWIS.TP_sites.csv", row.names=FALSE)
 
-# finished up to here saving everything...long day of learning
-
-
-
-
-
-
-
 # download the raw daily flow data for these sites. To do this:
 # readNWISdv can be used to download a single dataframe with all the raw flow data for a vector of gauge numbers (this takes a looong time):
 
@@ -302,9 +294,50 @@ map.NWIS.TP_sites<-df.NWIS.TP_site_metadata%>%
   mutate(site_id= paste(site_no, station_nm), n = NA, .before = 1)%>%
   select(c(1:3))
 
-# mapview(map.NWIS.TP_sites)
+mapview(map.NWIS.TP_sites)
 
 # save(map.NWIS.TP_sites, file = 'C:/PhD/CQ/Processed_Data/map.NWIS.TP_sites.Rdata')
+
+# build a matrix of the number of TP samples as a function of watershed size. To do this:
+
+# I already have adf with paired CQ observations and DA, just need to get the distinct sites:
+
+TP_sites<-df.NWIS.TP_CQ%>%distinct(site_no, .keep_all = T)
+
+# set up df to populate:
+
+m<-data.frame(Min_num_samples  = c(20,50,75,100,200), '25' = NA, '50' = NA, '100' = NA, '150'=NA, '250'=NA, '500'=NA, '1000'=NA, 'Unlimited'=NA)
+
+# set up variables for thresholds for number of samples and DA size:
+
+n_sam<- c(20,50,75,100,200)-1
+
+min_DA<- c(25,50,100,150,250,500,1000)
+
+# loop through number of samples (rows):
+
+# i<-1
+
+for (i in seq_along(n_sam)){
+  
+  temp.i<-TP_sites%>%filter(n>n_sam[i])
+  
+  m$Unlimited[i]<-dim(temp.i)[1]
+
+  # j<-2
+  
+  # loop through the size of the DA (columns)
+  for(j in  seq_along(min_DA)){
+    
+    temp.j<-temp.i%>%filter(drain_area_va<=min_DA[j])
+    
+    m[i,j+1]<-dim(temp.j)[1]
+    
+  }
+  
+}
+
+
 
 # finally save image to workspace:
 

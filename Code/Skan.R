@@ -63,13 +63,21 @@ df.Skan.TP.sites <- read_excel("C:/PhD/CQ/Raw_Data/AISkanListTP.xlsx")
 df.Skan.TP.sites<-df.Skan.TP.sites%>%drop_na(Latitude)%>%
   mutate(`Site Name`=paste(`Site Name`,Type))
 
-# delinate each site and run through steps to convert DA geometries 
+# delinate each site and run through steps to convert DA geometries. todothis: 
 
-# delinate using funcitons:
+# use function (source) todownload DA and set the names of the DA sites in the list:
 
 l.SS_WS.Skan<-lapply(seq_along(df.Skan.TP.sites$Latitude), \(i) Ryan_delineate(df.Skan.TP.sites$Longitude[i],df.Skan.TP.sites$Latitude[i]))
 
-df.sf.Skan<-fun.l.SS_WS.to.sfdf(l.SS_WS.Skan, df.Skan.TP.sites$`Site Name`)
+names(l.SS_WS.Skan)<-df.Skan.TP.sites$`Site Name`
+
+save(l.SS_WS.Skan, file = 'C:/PhD/CQ/Downloaded_Data/l.SS_WS.Skan.Rdata')
+
+# convert to df sf using function (source):
+
+df.sf.Skan<-fun.l.SS_WS.to.sfdf(l.SS_WS.Skan)
+
+save(df.sf.Skan, file = 'C:/PhD/CQ/Processed_Data/df.sf.Skan.Rdata')
 
 # look at a map of the watersheds:
 
@@ -96,18 +104,28 @@ df.sf.Skan_DA<-st_read('C:/PhD/Research/Data/Skan/Skan_watershed_shapefile/globa
 
 mapview(df.sf.Skan_DA)
 
-# now use this boundary to get national hydrograph dataset (includes stream network):
+# now use this boundary to get national hydrograph dataset (includes stream network): to dothis:
+
 # first need to make valid:
 
 df.sf.Skan_DA<-st_make_valid(df.sf.Skan_DA)
 
-nhd<-get_nhd(df.sf.Skan_DA,label = '2') # just takes a while to run
+#download nhd:
 
-nhd_fp<-nhd$Flowline
+# nhd.Skan<-nhdget_nhd(df.sf.Skan_DA,label = '2') # just takes a while to run
 
+# save(nhd.Skan, file='C:/PhD/CQ/Downloaded_Data/nhd.Skan.Rdata')
+
+# save justthe flow path:
+
+nhd.Skan.fp<-nhd.Skan$Flowline
+
+# filteroutsmallerstreams? notsure ifthis works so left commented out (not in saved file):
 # nhd_fp<-filter(nhd_fp, !is.na(gnis_name))
 
-mapview(df.sf.Skan,zcol = 'Name')+mapview(nhd_fp)
+# look at nhd map
+
+mapview(df.sf.Skan,zcol = 'Name')+mapview(nhd.Skan.fp)
 
 ####################### Part 2 - Import flow data and scale to each site #######################
 
@@ -118,7 +136,7 @@ mapview(df.sf.Skan,zcol = 'Name')+mapview(nhd_fp)
 
 df.Ow<-readNWISsite('04235299')
 
-df.Ow_DA<-df.Ow$drain_area_va*2.58999
+v.Ow_DA<-df.Ow$drain_area_va*2.58999
 
 # download raw flow data:
 
@@ -188,17 +206,17 @@ plot(rast.Skan.CDL.2020)
 
 vect.Skan.proj<-terra::project(vect.Skan, crs(rast.Skan.CDL.2020))
 
-l.Skan.CDL_freq <- terra::extract(rast.Skan.CDL.2020, vect.Skan.proj, table,ID=FALSE)[[1]]
+l.Skan.CDL <- terra::extract(rast.Skan.CDL.2020, vect.Skan.proj, table,ID=FALSE)[[1]]
 
-l.Skan.CDL_freq<-lapply(l.Skan.CDL_freq, as.data.frame)
+l.Skan.CDL<-lapply(l.Skan.CDL, as.data.frame)
 
-l.Skan.CDL_freq<-lapply(l.Skan.CDL_freq, \(i) i%>%mutate(Var1 = as.integer(as.character(Var1)),Freq=round(Freq/sum(Freq),2))%>%dplyr::left_join(., linkdata, by = c('Var1' = 'MasterCat')))
+l.Skan.CDL<-lapply(l.Skan.CDL, \(i) i%>%mutate(Var1 = as.integer(as.character(Var1)),Freq=round(Freq/sum(Freq),2))%>%dplyr::left_join(., linkdata, by = c('Var1' = 'MasterCat')))
 
-names(l.Skan.CDL_freq)<-df.sf.Skan$Name
+names(l.Skan.CDL)<-df.sf.Skan$Name
 
-df.Skan.CDL_freq<-bind_rows(l.Skan.CDL_freq, .id = 'Name')
+df.Skan.CDL<-bind_rows(l.Skan.CDL, .id = 'Name')
 
-df.Skan.CDL_freq<-df.Skan.CDL_freq%>%
+df.Skan.CDL<-df.Skan.CDL%>%
   select(!Var1)%>%
   pivot_wider(., names_from = Crop, values_from = Freq)
 
@@ -211,7 +229,7 @@ plot(DEM)
 # extract elevation metrics over each sample watershed:
 # can use a function with multiple functions. If not doing this, you would need to run extract for each metric:
 
-Skan_DA_vect_proj<-terra::project(Skan_DA_vect, crs(DEM))
+vect.Skan.proj<-terra::project(vect.Skan, crs(DEM))
 
 f <- function(x, na.rm = T) {
   c(mean=mean(x, na.rm = na.rm),
@@ -220,11 +238,11 @@ f <- function(x, na.rm = T) {
   )
 }
 
-df.DEM_all <- as.data.frame(terra::extract(DEM, Skan_DA_vect_proj, f))
+df.Skan.DEM <- as.data.frame(terra::extract(DEM, vect.Skan.proj, f))
 
-names(df.DEM_all)<-c('Name', 'Elev_Avg', 'Elev_Range', 'Elev_SD')
+names(df.Skan.DEM)<-c('Name', 'Elev_Avg', 'Elev_Range', 'Elev_SD')
 
-df.DEM_all$Name<-df.sf.Skan$Name
+df.Skan.DEM$Name<-df.sf.Skan$Name
 
 #### Climate
 
@@ -246,21 +264,21 @@ vars<-c('pr', 'tmmn', 'tmmx')
 
 vars_funs<-c(`sum`, `min`, `max`)
 
-df.Climate<-data.frame(ID = 1:dim(df.Skan.CDL_freq)[1])
+df.Skan.Climate<-data.frame(ID = 1:dim(df.Skan.CDL)[1])
 
-# i<-1
+i<-1
 
 for (i in seq_along(vars)){
   
   # download:
   
-  climate<-getGridMET(Skan_DA_vect, varname = vars[i], startDate = "2016-01-01", endDate = "2019-12-31")[[1]]
+  climate<-getGridMET(vect.Skan, varname = vars[i], startDate = "2016-01-01", endDate = "2019-12-31")[[1]]
   
   # extract:
   
-  Skan_DA_vect_proj<-terra::project(Skan_DA_vect, crs(climate))
+  vect.Skan.proj<-terra::project(vect.Skan, crs(climate))
   
-  climate <- terra::extract(climate, Skan_DA_vect_proj, mean)
+  climate <- terra::extract(climate, vect.Skan.proj, mean)
   
   # reformat, convert dates, and calcualte annual stats:
   
@@ -273,43 +291,45 @@ for (i in seq_along(vars)){
     mutate(Year=paste0(vars[i],Year))%>%
     pivot_wider(names_from = Year, values_from = Annual)
   
-  df.Climate<-left_join(df.Climate, climate1, by = 'ID')
+  df.Skan.Climate<-left_join(df.Skan.Climate, climate1, by = 'ID')
   
 }
 
 # rename the ID column
 
-df.Climate[,1]<-df.DEM_all$Name
+df.Skan.Climate[,1]<-df.Skan.DEM$Name
 
-names(df.Climate)[1]<-'Name'
+names(df.Skan.Climate)[1]<-'Name'
 
 ##### Finally combine CDL, DEM, climate, and Streamstats predictors into common df:
 
-df.Subbasin_Predictors<-left_join(df.Skan.CDL_freq,df.DEM_all, by = 'Name')%>%left_join(.,df.Climate, by = 'Name')%>%left_join(.,df.sf.Skan, by = 'Name')
+df.Skan.Predictors<-left_join(df.Skan.CDL,df.Skan.DEM, by = 'Name')%>%left_join(.,df.Skan.Climate, by = 'Name')%>%left_join(.,df.sf.Skan, by = 'Name')
+
+save(df.Skan.Predictors, file = "C:/PhD/CQ/Processed_Data/df.Skan.Predictors.Rdata")
 
 ####################### Part 5 - combine C,Q, and data layers #######################
 
 # Need to combine C data set site format with data layers dataframe 
-# first reduce df.subbasin_predictors to just unique sites
+# first reduce df.Skan.Predictors to just unique sites
 # I cofirmed that the sites that have both SU and UFI names have similar datalayer entries by visual examinaiton of the dataframe
 
 # create a new column with the SU/UFI removed, then create a distinct dataframe from the name column:
 
-df.Subbasin_Predictors<-df.Subbasin_Predictors%>%
+df.Skan.Predictors<-df.Skan.Predictors%>%
   mutate(Name= trimws(substr(Name,1,nchar(Name)-3)), .after = 1)%>%
   distinct(Name, .keep_all = T)
 
-# Note that I cleaned up the df.Skan.C data in excel and saved as a new file
+# Note that I cleaned up the df.Skan.C data in excel and saved as a new file, reading it in again here:
+
+df.Skan.C <- read_excel("C:/PhD/Research/Data/Skan/SkanStream-Ryan_sites_edited_to_match_AISkanListTP.xlsx")
 
 # lets check the flows: there is a column with the Owasco INlet flows in df.Skan.C
 # but I want to check to see if they have been DA scaled:
 # convert cfs to cms:
 
-SkanC <- read_excel("C:/PhD/Research/Data/Skan/SkanStream-Ryan_sites_edited_to_match_AISkanListTP.xlsx")
-
-SkanC<-SkanC%>%
+df.Skan.C<-df.Skan.C%>%
   mutate(Date = as.Date(Date))%>%
-  left_join(.,Ow_Q, by = 'Date')%>%
+  left_join(.,df.Ow_Q, by = 'Date')%>%
   relocate(Q, .after=4)%>%
   rename(Name = Location)%>%
   mutate(Q_cms = Q*0.028316832, .after=5 )
@@ -317,29 +337,55 @@ SkanC<-SkanC%>%
 # they are the same so not DA scaled
 # to DA scale, need to add the drainage areas and drainage area ratios (Skan subbasin DA/Ow DA) to data layers:
 
-Skan_DA_vect<-vect(df.sf.Skan)
+vect.Skan<-vect(df.sf.Skan)
 
-Skan_DA_vect$area_KM2<-expanse(Skan_DA_vect, unit="km")
+vect.Skan$area_KM2<-expanse(vect.Skan, unit="km")
 
-df.Subbasin_Predictors<-as.data.frame(Skan_DA_vect[,c('Name', 'area_KM2')])%>%
+df.Skan.Predictors<-as.data.frame(vect.Skan[,c('Name', 'area_KM2')])%>%
   mutate(Name= trimws(substr(Name,1,nchar(Name)-3)), .after = 1)%>%
   distinct(Name, .keep_all = T)%>%
-  left_join(.,df.Subbasin_Predictors, by = 'Name')%>%
-  mutate(sub_Ow_DA_ratio = area_KM2/Ow_DA, .after = 2)
+  left_join(.,df.Skan.Predictors, by = 'Name')%>%
+  mutate(sub_Ow_DA_ratio = area_KM2/v.Ow_DA, .after = 2)
 
-# now merge the area ratios to SkanC andcalcualte drainage area scaled flow:
+# now merge the area ratios to df.Skan.C andcalcualte drainage area scaled flow:
 
-SkanC<-left_join(df.Subbasin_Predictors[,c('Name','area_KM2',"sub_Ow_DA_ratio")], SkanC, by = 'Name')%>%
+df.Skan.C<-left_join(df.Skan.Predictors[,c('Name','area_KM2',"sub_Ow_DA_ratio")], df.Skan.C, by = 'Name')%>%
   mutate(Q_cms_scaled = Q_cms*sub_Ow_DA_ratio, .after = 4)%>%
   select(!c(2,3,8,9)) # remove duplicated columns in data layers df and unwanted flow columns
 
 # now merge the data layers with the CQ dataframe
 
-df.CQ_DL<-left_join(SkanC, df.Subbasin_Predictors, by = 'Name')
+df.Skan.CQ.with.Predictors<-left_join(df.Skan.C, df.Skan.Predictors, by = 'Name')
 
 # note that if I want antcdent conditions I will need to very much changethe climate for loop (proably a double for loop)
-
 # note that the number of unique sites here is not as many as in the first few parts of the code because not all the sampling sites lined up with the sites in AISKanTPlist.csv
+
+save.image(file = "C:/PhD/CQ/Processed_Data/Skan.Rdata")
+
+# saved up to here
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ####################### Part 6 - Fit 2 slope models to TP CQ curves #######################
 
@@ -519,7 +565,7 @@ df.TP.CQ_slopes<-left_join(df.TP.CQ_OLS, df.TP.CQ_Sens, by = 'Name')
 
 # now we can merge the watershed characteristic data to this dataframe
 
-df.TP.CQ_slopes<-left_join(df.TP.CQ_slopes, df.Subbasin_Predictors, by = 'Name')
+df.TP.CQ_slopes<-left_join(df.TP.CQ_slopes, df.Skan.Predictors, by = 'Name')
 
 # now run correlations between intercepts and slopes and watershed characteristics
 
@@ -560,7 +606,7 @@ ggpubr::ggarrange(plotlist = plist, ncol=2, nrow=2, common.legend = TRUE, legend
 
 
 
-# save.image(file = "C:/PhD/Research/Data/Skan/Skan_CQ.Rdata")
+
 
 load("C:/PhD/CQ/Processed_Data/Skan_CQ.Rdata")
 

@@ -535,6 +535,8 @@ names(df.NWIS.DEM)<-c('Name', 'Elev_Avg', 'Elev_Range', 'Elev_SD')
 
 df.NWIS.DEM$Name<-df.sf.NWIS.keep$Name
 
+save(df.NWIS.DEM, file= 'Processed_Data/df.NWIS.DEM.Rdata')
+
 #### Climate
 
 # steps:
@@ -609,7 +611,7 @@ df.NWIS.TP_CQ # df withraw TPCQ observations
 
 # finally save image to workspace:
 
-# save.image(file = 'C:/PhD/CQ/Processed_Data/NWIS.Rdata')
+# save.image(file = 'Processed_Data/NWIS.Rdata')
 
 load('Processed_Data/NWIS.Rdata')
 

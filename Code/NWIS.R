@@ -6,6 +6,7 @@ gc()
 ####################### Load packages #######################
 
 library(climateR)
+library(readxl)
 library(CropScapeR)
 library(FedData)
 library(streamstats)
@@ -31,15 +32,18 @@ sf_use_s2(TRUE) # for sf
 
 setTimeout(1000) # for streamstats api
 
+meters_to_miles = 1/1609.334
+
 ####################### Functions #######################
 
 source("C:/PhD/CQ/Code/Ryan_functions.R")
 
 ####################### Goal of code #######################
 
-# Process the NWIS database for the CQ analysis
+# 1) Process the NWIS database for the CQ analysis
+# 2) Run through CQ metrics/watershed attribute correlation
 
-####################### Workflow #######################
+####################### Process the NWIS database for the CQ analysis #######################
 
 # this code adapted from NYS_site_ranking.R
 
@@ -298,9 +302,11 @@ mapview(map.NWIS.TP_sites)
 
 # save(map.NWIS.TP_sites, file = 'C:/PhD/CQ/Processed_Data/map.NWIS.TP_sites.Rdata')
 
+####################### Run through CQ metrics/watershed attribute correlation #######################
+
 # build a matrix of the number of TP samples as a function of watershed size. To do this:
 
-# I already have adf with paired CQ observations and DA, just need to get the distinct sites:
+# I already have a df with paired CQ observations and DA, just need to get the distinct sites:
 
 TP_sites<-df.NWIS.TP_CQ%>%distinct(site_no, .keep_all = T)
 
@@ -337,7 +343,108 @@ for (i in seq_along(n_sam)){
   
 }
 
-#test line
+# going to use this matrix to pick subsets of the NWIS sites and see how it affects the correlations analysis:
+
+# correlation analysis (adapated from Skan_CQ.R):
+
+# create a single dataframe of the CQ observations and watershed attributes for all sites. to do this:
+
+# read in the gauges 2 database (I am forgoing the datalayers workflow for now since I may have a great set of predictors in this database):
+
+# read in all sheets using function, remove the last element (does notcomtain useful info), and convert to a single df:
+
+l.G2 <- read_excel_allsheets("Raw_Data/gagesII_sept30_2011_conterm.xlsx")
+
+l.G2[[27]]<-NULL
+
+df.G2<-reduce(l.G2, full_join, by = "STAID")
+
+# filter the gauges2 to the NYS TP CQ sites:
+
+df.G2<-df.G2%>%filter(STAID %in% unique(df.NWIS.TP_CQ$site_no))
+
+# only 89 of the orginal 137 sites are in gauges 2
+
+# lets see what the tradeoff matrix looks like if only these 89 are included:
+
+TP_sites<-df.NWIS.TP_CQ%>%
+  filter(site_no %in% df.G2$STAID)%>%
+  distinct(site_no, .keep_all = T)
+
+m<-data.frame(Min_num_samples  = c(20,50,75,100,200), '25' = NA, '50' = NA, '100' = NA, '150'=NA, '250'=NA, '500'=NA, '1000'=NA, 'Unlimited'=NA)
+
+n_sam<- c(20,50,75,100,200)-1
+
+min_DA<- c(25,50,100,150,250,500,1000)
+
+# i<-1
+
+for (i in seq_along(n_sam)){
+  
+  temp.i<-TP_sites%>%filter(n>n_sam[i])
+  
+  m$Unlimited[i]<-dim(temp.i)[1]
+  
+  # j<-2
+  
+  for(j in  seq_along(min_DA)){
+    
+    temp.j<-temp.i%>%filter(drain_area_va<=min_DA[j])
+    
+    m[i,j+1]<-dim(temp.j)[1]
+    
+  }
+  
+}
+
+# I cant make the call, 
+# iwantto just stick withthe plan, so now going back to datalayers analysis
+# so now I need to delinate the 137 NWIS sites:
+
+l.SS_WS.NWIS<-lapply(seq_along(df.NWIS.TP_site_metadata$site_no), \(i) Delineate(df.NWIS.TP_site_metadata$dec_long_va[i], df.NWIS.TP_site_metadata$dec_lat_va[i]))
+
+names(l.SS_WS.NWIS)<-df.NWIS.TP_site_metadata$site_no
+
+save(l.SS_WS.NWIS, file = 'C:/PhD/CQ/Downloaded_Data/l.SS_WS.NWIS.Rdata')
+
+df.sf.NWIS<-fun.l.SS_WS.to.sfdf(l.SS_WS.NWIS)
+
+save(df.sf.NWIS, file = 'C:/PhD/CQ/Processed_Data/df.sf.NWIS.Rdata')
+
+# calculate DA using vect:
+
+vect.NWIS<-vect(df.sf.NWIS)
+
+vect.NWIS$area_KM2<-expanse(vect.NWIS, unit="km")
+
+# add DA in mi2 to df.sf:
+
+df.sf.NWIS$area_sqmi<-expanse(vect.NWIS, unit="km")*0.386102
+
+# add NWIS tabulated area to df sf: first download the metadata for the sites using readNWISsite, then merge drain_area_va column to sfdf:
+
+temp<-readNWISsite(df.sf.NWIS$Name)
+
+df.sf.NWIS<-left_join(df.sf.NWIS, temp[,c(2,30)], by = c('Name'='site_no'))
+
+# calcuate the percent error of the delination:
+
+df.sf.NWIS$Delination_Error<-(df.sf.NWIS$area_sqmi-df.sf.NWIS$drain_area_va)/df.sf.NWIS$drain_area_va
+
+# lets look at sites with greater than X error:
+
+temp<-df.sf.NWIS[,c(1,107)]%>%filter(abs(Delination_Error)>.05)
+
+# I suspect that snapping the lat long to nhd would improve the delineation success
+# I can try it
+
+
+
+
+df.NWIS.TP_CQ # df withraw TPCQ observations
+
+
+
 
 # finally save image to workspace:
 
@@ -345,6 +452,6 @@ for (i in seq_along(n_sam)){
 
 load('C:/PhD/CQ/Processed_Data/NWIS.Rdata')
 
-#testtest
+
 
 

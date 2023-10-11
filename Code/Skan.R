@@ -360,11 +360,11 @@ df.Skan.CQ.with.Predictors<-left_join(df.Skan.C, df.Skan.Predictors, by = 'Name'
 # note that if I want antcdent conditions I will need to very much changethe climate for loop (proably a double for loop)
 # note that the number of unique sites here is not as many as in the first few parts of the code because not all the sampling sites lined up with the sites in AISKanTPlist.csv
 
-save.image(file = "C:/PhD/CQ/Processed_Data/Skan.Rdata")
+# save.image(file = "C:/PhD/CQ/Processed_Data/Skan.Rdata")
 
 # saved up to here
 
-
+load("C:/PhD/CQ/Processed_Data/Skan.Rdata")
 
 
 
@@ -389,11 +389,15 @@ save.image(file = "C:/PhD/CQ/Processed_Data/Skan.Rdata")
 
 ####################### Part 6 - Fit 2 slope models to TP CQ curves #######################
 
-# look at CQ curves for TP:
+# look at CQ curves for TP: to do this:
 
-df.Part6<-df.CQ_DL%>%filter(!is.na(`Total Phosphorus (TP) umol/L (From ICP-MS)`))
+# create a TP cQ dataframe:
 
-ggplot(data = df.Part6, aes(x = log(Q_cms_scaled), y = log(`Total Phosphorus (TP) umol/L (From ICP-MS)`)))+
+df.Skan.TP_CQ.with.Predictors<-df.Skan.CQ.with.Predictors%>%filter(!is.na(`Total Phosphorus (TP) umol/L (From ICP-MS)`))
+
+# plot:
+
+ggplot(data = df.Skan.TP_CQ.with.Predictors, aes(x = log(Q_cms_scaled), y = log(`Total Phosphorus (TP) umol/L (From ICP-MS)`)))+
   geom_smooth(method = 'lm')+
   geom_point()+
   facet_wrap('Name', scales = 'fixed')
@@ -539,7 +543,7 @@ df_Seg_dis<-left_join(df_Seg_dis, smdf, by = c('site'='Name'))
 
 # create a dataframe with OLS and sens slope intercept and slopes:
 
-df.TP.CQ_OLS<-df.Part6%>%
+df.Skan.TP_CQ.OLS<-df.Skan.TP_CQ.with.Predictors%>%
   mutate(log_C = log(`Total Phosphorus (TP) umol/L (From ICP-MS)`), log_Q = log(Q_cms_scaled), C = `Total Phosphorus (TP) umol/L (From ICP-MS)`, Q = Q_cms_scaled)%>%
   filter(is.finite(log_C))%>%
   group_by(Name)%>%
@@ -549,7 +553,7 @@ df.TP.CQ_OLS<-df.Part6%>%
   }) %>%
   ungroup
 
-df.TP.CQ_Sens<-df.Part6%>%
+df.Skan.TP_CQ.Sens<-df.Skan.TP_CQ.with.Predictors%>%
   mutate(log_C = log(`Total Phosphorus (TP) umol/L (From ICP-MS)`), log_Q = log(Q_cms_scaled), C = `Total Phosphorus (TP) umol/L (From ICP-MS)`, Q = Q_cms_scaled)%>%
   filter(is.finite(log_C))%>%
   group_by(Name)%>%
@@ -561,40 +565,41 @@ df.TP.CQ_Sens<-df.Part6%>%
 
 # merge OLS and Sens:
 
-df.TP.CQ_slopes<-left_join(df.TP.CQ_OLS, df.TP.CQ_Sens, by = 'Name')
+df.Skan.TP_CQ.OLS_Sens<-left_join(df.Skan.TP_CQ.OLS, df.Skan.TP_CQ.Sens, by = 'Name')
 
 # now we can merge the watershed characteristic data to this dataframe
 
-df.TP.CQ_slopes<-left_join(df.TP.CQ_slopes, df.Skan.Predictors, by = 'Name')
+df.Skan.TP_CQ.OLS_Sens<-left_join(df.Skan.TP_CQ.OLS_Sens, df.Skan.Predictors, by = 'Name')
 
-# now run correlations between intercepts and slopes and watershed characteristics
+# now run correlations between intercepts and slopes and watershed characteristics. to do this:
 
-# create a dataframe with just the preditor and predictands 
-# create variable with the number of months
+# rename OLS and Sens dataframe:
 
-# going to need to do this four times, one for each intercept andslope for OLS and Sens:
+df.Skan.TP.cor<-df.Skan.TP_CQ.OLS_Sens #[,-c(1:4)]
 
-df.TP.cor<-df.TP.CQ_slopes #[,-c(1:4)]
+n_sites<-dim(df.Skan.TP.cor)[1] 
 
-n_month<-dim(df.TP.cor)[1] # just carrying over the name n_months from where I got this code, C:\PhD\Research\Mohawk\Code\Mohawk_Regression-analyizing_predictor_df.R
+# I orginally did this workflow using n_months (C:\PhD\Research\Mohawk\Code\Mohawk_Regression-analyizing_predictor_df.R)
 
 # now use the corrr package to correlate() and focus() on your variable of choice
 
-df.TP.cor <- df.TP.cor %>% 
+df.Skan.TP.cor <- df.Skan.TP.cor %>% 
   correlate() %>% 
   focus(c(OLS.I, OLS.S, Sen.I, Sen.S))%>%
   pivot_longer(cols= c(2:5), names_to = 'CQ_Parameter', values_to = 'Pearson_Correlation')%>%
-  mutate(p_val = round(2*pt(-abs(Pearson_Correlation*sqrt((n_month-2)/(1-(Pearson_Correlation)^2))), n_month-2),2))%>%
+  mutate(p_val = round(2*pt(-abs(Pearson_Correlation*sqrt((n_sites-2)/(1-(Pearson_Correlation)^2))), n_sites-2),2))%>%
   mutate(sig_0.05 = ifelse(p_val <= 0.05, 'sig', 'not'))%>%
   drop_na(p_val) # some standard deviaitons return NA because the watershed characteristic values are zero
 
-# then ggplot2 package to plot the results
+# then plotresults: todo this:
 
-l.cor<-df.TP.cor %>%
-  split(., df.TP.cor$CQ_Parameter)%>%
+# create a list of each CQ parameter (4: OLS and Sens slope and intercept)and format it for ggplotting:
+
+l.Skan.cor<-df.Skan.TP.cor %>%
+  split(., df.Skan.TP.cor$CQ_Parameter)%>%
   lapply(., \(i) i%>%mutate(term = factor(term, levels = unique(term[order(Pearson_Correlation)])))%>%filter(!between(Pearson_Correlation, -0.25,.25))) # Order by correlation strength
   
-plist<-lapply(l.cor, \(i) i%>%ggplot(aes(x = term, y = Pearson_Correlation, color = sig_0.05)) +
+plist<-lapply(l.Skan.cor, \(i) i%>%ggplot(aes(x = term, y = Pearson_Correlation, color = sig_0.05)) +
          geom_bar(stat = "identity") +
          facet_wrap('CQ_Parameter')+
          ylab(paste('Pearson Correlation')) +

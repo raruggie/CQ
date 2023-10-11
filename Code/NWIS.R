@@ -36,7 +36,7 @@ meters_to_miles = 1/1609.334
 
 ####################### Functions #######################
 
-source("C:/PhD/CQ/Code/Ryan_functions.R")
+source("Code/Ryan_functions.R")
 
 ####################### Goal of code #######################
 
@@ -431,12 +431,165 @@ df.sf.NWIS<-left_join(df.sf.NWIS, temp[,c(2,30)], by = c('Name'='site_no'))
 
 df.sf.NWIS$Delination_Error<-(df.sf.NWIS$area_sqmi-df.sf.NWIS$drain_area_va)/df.sf.NWIS$drain_area_va
 
-# lets look at sites with greater than X error:
+# I want to look at the delimaitons that are on the cusp of not working:
 
-temp<-df.sf.NWIS[,c(1,107)]%>%filter(abs(Delination_Error)>.05)
+temp<-df.sf.NWIS[,c(1,107)]%>%
+  filter(abs(Delination_Error)>.02)
 
-# I suspect that snapping the lat long to nhd would improve the delineation success
-# I can try it
+mapview(temp)
+  
+# after playing with the numbers, 2% seems like a good threshold for non-delineations:
+# subset df.sf to those sites that are considered to delineate correctly:
+
+df.sf.NWIS.keep<-df.sf.NWIS%>%filter(abs(Delination_Error)<=.02)
+
+# note I suspect that snapping the lat long to nhd would improve the delineation success notgoing to do that now
+
+# now run the datalayers workflow for these sites:
+
+#### CDL :
+
+# download:
+
+rast.NWIS.CDL.2020 <- GetCDLData(aoi = df.sf.NWIS.keep, year = "2020", type = "b", tol_time = 1000)
+
+# convert to rast:
+
+rast.NWIS.CDL.2020<-rast(rast.NWIS.CDL.2020)
+
+# plot
+
+plot(rast.NWIS.CDL.2020)
+
+# reproject to sample watershed vector data to match raster data:
+
+vect.NWIS<-vect(df.sf.NWIS.keep) # need to first ininalize vect since sometimes reading in rdata file (terra issue)
+
+vect.NWIS.proj<-terra::project(vect.NWIS, crs(rast.NWIS.CDL.2020))
+
+# extract frequency tables for each sample watershed
+
+l.NWIS.CDL <- terra::extract(rast.NWIS.CDL.2020, vect.NWIS.proj, table,ID=FALSE)[[1]]
+
+# save(l.NWIS.CDL, file='Processed_Data/l.NWIS.CDL.Rdata')
+
+# convert resulting list of tables to list of dfs
+
+l.NWIS.CDL<-lapply(l.NWIS.CDL, as.data.frame)
+
+# left join each df in the list to the CDL legend key, as well as calcuate the pland:
+  
+l.NWIS.CDL<-lapply(l.NWIS.CDL, \(i) i%>%mutate(Var1 = as.integer(as.character(Var1)),Freq=round(Freq/sum(Freq),2))%>%dplyr::left_join(., linkdata, by = c('Var1' = 'MasterCat')))
+
+# set names of list:
+
+names(l.NWIS.CDL)<-df.sf.NWIS.keep$Name
+
+# combine list into single df:
+
+df.NWIS.CDL<-bind_rows(l.NWIS.CDL, .id = 'Name')
+
+# remove potential for one of the MasterCats in the CDL to be empty, which is messing with the pivot_wider below:
+
+df.NWIS.CDL<-filter(df.NWIS.CDL, Crop != '')
+
+# pivot wider:
+
+df.NWIS.CDL<- pivot_wider(df.NWIS.CDL[,-2], names_from = Crop, values_from = Freq)
+
+# check to see if add up to 100%:
+
+sort(rowSums(df.NWIS.CDL[,-1], na.rm = T))
+
+# looks good. Done with CDL
+
+#### NED
+
+DEM<-get_ned(df.sf.NWIS.keep, label = '2') # already SpatRaster!
+
+plot(DEM)
+
+# extract elevation metrics over each sample watershed:
+# can use a function with multiple functions. If not doing this, you would need to run extract for each metric:
+
+vect.NWIS.proj<-terra::project(vect.NWIS, crs(DEM))
+
+f <- function(x, na.rm = T) {
+  c(mean=mean(x, na.rm = na.rm),
+    range=max(x, na.rm = na.rm)-min(x, na.rm = na.rm),
+    sd=sd(x, na.rm = na.rm)
+  )
+}
+
+df.NWIS.DEM <- as.data.frame(terra::extract(DEM, vect.NWIS.proj, f))
+
+names(df.NWIS.DEM)<-c('Name', 'Elev_Avg', 'Elev_Range', 'Elev_SD')
+
+df.NWIS.DEM$Name<-df.sf.NWIS.keep$Name
+
+#### Climate
+
+# steps:
+
+# Loop through the three metrics and metric specific operations.
+# for each metric, perform:
+
+# 1) download all gridded climate data for a metric (e.g.: precip)
+# 2) extract daily mean of the metric for each subbasin into df
+# 3) reformat (pivot longer),convert the date, and calcualte annual statistics based on the metric (e.g. precip is annual totals)
+
+# the definition of:
+# pr = total annual precio
+# tmmn = minimum of all annual daily minimum temperature 
+# tmmx = maximum of all annual daily maximum temperature
+
+vars<-c('pr', 'tmmn', 'tmmx')
+
+vars_funs<-c(`sum`, `min`, `max`)
+
+df.NWIS.Climate<-data.frame(ID = 1:dim(df.NWIS.CDL)[1])
+
+i<-1
+
+for (i in seq_along(vars)){
+  
+  # download:
+  
+  climate<-getGridMET(vect.NWIS, varname = vars[i], startDate = "2016-01-01", endDate = "2019-12-31")[[1]]
+  
+  # extract:
+  
+  vect.NWIS.proj<-terra::project(vect.NWIS, crs(climate))
+  
+  climate <- terra::extract(climate, vect.NWIS.proj, mean)
+  
+  # reformat, convert dates, and calcualte annual stats:
+  
+  climate1<-climate%>%
+    pivot_longer(cols= starts_with(paste0(vars[i],"_")), names_to = 'Date',values_to = "Value")%>%
+    mutate(Date=as.Date(str_replace(Date, paste0(vars[i],"_"), "")))%>%
+    group_by(year(Date),ID)%>%
+    summarize(Annual = vars_funs[[i]](Value))%>%
+    rename(Year=1)%>%
+    mutate(Year=paste0(vars[i],Year))%>%
+    pivot_wider(names_from = Year, values_from = Annual)
+  
+  df.NWIS.Climate<-left_join(df.NWIS.Climate, climate1, by = 'ID')
+  
+}
+
+# rename the ID column
+
+df.NWIS.Climate[,1]<-df.NWIS.DEM$Name
+
+names(df.NWIS.Climate)[1]<-'Name'
+
+##### Finally combine CDL, DEM, climate, and Streamstats predictors into common df:
+
+df.NWIS.Predictors<-left_join(df.NWIS.CDL,df.NWIS.DEM, by = 'Name')%>%left_join(.,df.NWIS.Climate, by = 'Name')%>%left_join(.,df.sf.NWIS.keep, by = 'Name')
+
+# save(df.NWIS.Predictors, file = "C:/PhD/CQ/Processed_Data/df.NWIS.Predictors.Rdata")
+
 
 
 
@@ -450,7 +603,7 @@ df.NWIS.TP_CQ # df withraw TPCQ observations
 
 # save.image(file = 'C:/PhD/CQ/Processed_Data/NWIS.Rdata')
 
-load('C:/PhD/CQ/Processed_Data/NWIS.Rdata')
+load('Processed_Data/NWIS.Rdata')
 
 
 

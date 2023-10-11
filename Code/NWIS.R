@@ -505,14 +505,16 @@ sort(rowSums(df.NWIS.CDL[,-1], na.rm = T))
 
 #### NED
 
-DEM<-get_ned(df.sf.NWIS.keep, label = '2') # already SpatRaster!
+# download:
 
-plot(DEM)
+DEM.NWIS<-get_ned(df.sf.NWIS.keep, label = '2') # already SpatRaster!
 
-# extract elevation metrics over each sample watershed:
-# can use a function with multiple functions. If not doing this, you would need to run extract for each metric:
+writeRaster(DEM.NWIS, file='Downloaded_Data/DEM.NWIS.tif')
 
-vect.NWIS.proj<-terra::project(vect.NWIS, crs(DEM))
+# plot(DEM.NWIS)
+
+# extract elevation metrics over each sample watershed: to do this:
+# build a function with multiple functions:
 
 f <- function(x, na.rm = T) {
   c(mean=mean(x, na.rm = na.rm),
@@ -521,7 +523,13 @@ f <- function(x, na.rm = T) {
   )
 }
 
-df.NWIS.DEM <- as.data.frame(terra::extract(DEM, vect.NWIS.proj, f))
+# reproject NWIS basins to DEM crs:
+
+vect.NWIS<-vect(df.sf.NWIS.keep)
+
+vect.NWIS.proj<-terra::project(vect.NWIS, crs(DEM.NWIS))
+
+df.NWIS.DEM <- as.data.frame(terra::extract(DEM.NWIS, vect.NWIS.proj, f))
 
 names(df.NWIS.DEM)<-c('Name', 'Elev_Avg', 'Elev_Range', 'Elev_SD')
 

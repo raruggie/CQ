@@ -445,9 +445,26 @@ df.sf.NWIS.keep<-df.sf.NWIS%>%filter(abs(Delination_Error)<=.02)
 
 # note I suspect that snapping the lat long to nhd would improve the delineation success notgoing to do that now
 
+# of these sites, Iwant to filter down those that havedata during the CDLperiod
+# the CDL goes back to 2008: todothis:
+
+# filter theraw TPdatabased on date and toget the desired sites:
+
+temp<-df.NWIS.TP_CQ%>%filter(year(df.NWIS.TP_CQ$sample_dt) >= 2008)
+
+df.sf.NWIS.keep<-df.sf.NWIS.keep%>%filter(Name %in% unique(temp$site_no))
+
+# remove the Long island sites:
+
+df.sf.NWIS.keep<-df.sf.NWIS.keep%>%filter(!Name %in% c("01304000", "01305000", "01304500"))
+
+# map of this new set of sites:
+
+mapview(df.sf.NWIS.keep)
+
 # now run the datalayers workflow for these sites:
 
-#### CDL :
+#### CDL: note when I ran ths CDL code block I used the 103 sites thatwere apartofthe set, this is prior to filtering based onthe CDLdate... so I am just going to filter the resulting CDL df at the end. Just note that what is saved is of the 103 sites, but that the code doesnt reflect this, i.e. I just ran the filter anddidnt keep the code because df.NWIS.TP.keep would be down to 56 if I did it right 
 
 # download:
 
@@ -529,13 +546,23 @@ vect.NWIS<-vect(df.sf.NWIS.keep)
 
 vect.NWIS.proj<-terra::project(vect.NWIS, crs(DEM.NWIS))
 
+# extract the metrics over each watershed using the function above:
+
 df.NWIS.DEM <- as.data.frame(terra::extract(DEM.NWIS, vect.NWIS.proj, f))
+
+# set the names of the df:
 
 names(df.NWIS.DEM)<-c('Name', 'Elev_Avg', 'Elev_Range', 'Elev_SD')
 
+# set the names of the sites:
+
 df.NWIS.DEM$Name<-df.sf.NWIS.keep$Name
 
+# finally save the df:
+
 save(df.NWIS.DEM, file= 'Processed_Data/df.NWIS.DEM.Rdata')
+
+# done with DEM
 
 #### Climate
 
@@ -557,23 +584,38 @@ vars<-c('pr', 'tmmn', 'tmmx')
 
 vars_funs<-c(`sum`, `min`, `max`)
 
+# set up a df for appending into each loop:
+
 df.NWIS.Climate<-data.frame(ID = 1:dim(df.NWIS.CDL)[1])
 
 i<-1
 
+# loop through the climate variables in vars:
+
 for (i in seq_along(vars)){
   
-  # download:
+  # download a Spatraster for the entire bounding box of all the watersheds of the climate variable data for the loops iteration
+  # each layer of the spatraster is a day for the climate variable in thedaterange provided inthe function call:
   
   climate<-getGridMET(vect.NWIS, varname = vars[i], startDate = "2016-01-01", endDate = "2019-12-31")[[1]]
   
-  # extract:
+  # reproject the watersheds to the crs of the climate variables raster:
   
   vect.NWIS.proj<-terra::project(vect.NWIS, crs(climate))
+  
+  # extract the daily mean of the climate variables data over the watersheds:
+  # thisreturns a dataframe thefirstcolumn is the site (justnumbered 1-56 right now) and the other columns are the daily values of the climate vairable (taking the mean ofthe raster cells over the watershed): 
   
   climate <- terra::extract(climate, vect.NWIS.proj, mean)
   
   # reformat, convert dates, and calcualte annual stats:
+  
+  # pivot Longer: each of the columns for the daily values of the climate variable starts withthevariable name and an underscore, so using that pattern to make a long dataframe 
+  # format the dates: the date is contained withinthe column that was priviously pivoted into a single column. so reformating this column and turing into a date:
+  # grouping by the site and year, summarize the daily values into an annualvalue based onthe operation for the climatevariable. for pricep, sum is used, for min temp min is used, and formax temp max is used!:
+  # rename the reulting year(Date) column to a nicer name:
+  # renaming the values ofthe year column: add the climate variable to the year,this pairs withthe next andfinal step:
+  # pivot wider to get unique columns for the years of the cimlatevariable (here its 2016-2019):
   
   climate1<-climate%>%
     pivot_longer(cols= starts_with(paste0(vars[i],"_")), names_to = 'Date',values_to = "Value")%>%
@@ -584,29 +626,141 @@ for (i in seq_along(vars)){
     mutate(Year=paste0(vars[i],Year))%>%
     pivot_wider(names_from = Year, values_from = Annual)
   
+  # merge the climate variables data to a common dataframe (initalized prior to loop).
+  # New columns are added for each site:
+  
   df.NWIS.Climate<-left_join(df.NWIS.Climate, climate1, by = 'ID')
   
 }
 
-# rename the ID column
+# rename the sites:
 
 df.NWIS.Climate[,1]<-df.NWIS.DEM$Name
 
+# rename the sites:
+
 names(df.NWIS.Climate)[1]<-'Name'
 
-##### Finally combine CDL, DEM, climate, and Streamstats predictors into common df:
+# save df:
+
+save(df.NWIS.Climate, file = 'Processed_Data/df.NWIS.Climate.Rdata')
+
+## combine climate,CDL, DEM, and SS_WS to one df:
 
 df.NWIS.Predictors<-left_join(df.NWIS.CDL,df.NWIS.DEM, by = 'Name')%>%left_join(.,df.NWIS.Climate, by = 'Name')%>%left_join(.,df.sf.NWIS.keep, by = 'Name')
 
-# save(df.NWIS.Predictors, file = "C:/PhD/CQ/Processed_Data/df.NWIS.Predictors.Rdata")
+##### Correlations
+
+# set up a datatframe to feed into eachOLSand sens pipes:
+
+# combined the predictors df with the cq data:
+
+temp<-df.NWIS.TP_CQ%>%
+  rename(Name = site_no)%>%
+  filter(Name %in% df.sf.NWIS.keep$Name)%>%
+  left_join(., df.NWIS.Predictors, by = 'Name')%>%
+  mutate(log_C = log(result_va), log_Q = log(X_00060_00003), C = result_va, Q = X_00060_00003)%>%
+  filter(is.finite(log_C))%>%
+  filter(is.finite(log_Q))
+
+# create a dataframe with OLS and sens slope intercept and slopes:
+
+df.OLS<-temp%>%
+  group_by(Name)%>%
+  do({ OLS.co <- coef(lm(log_C ~ log_Q, .))
+  summarize(., OLS.I = OLS.co[1], 
+            OLS.S = OLS.co[2])
+  }) %>%
+  ungroup
+
+df.Sens<-temp%>%
+  group_by(Name)%>%
+  do({ Sens.co<-zyp.sen(log_C~log_Q,.)
+  summarize(., Sen.I = Sens.co$coefficients[[1]],
+            Sen.S= Sens.co$coefficients[[2]])
+  }) %>%
+  ungroup
+
+# merge OLS and Sens:
+
+df.OLS_Sens<-left_join(df.OLS, df.Sens, by = 'Name')
+
+# merge back the watershed characteristic data to this dataframe:
+
+df.OLS_Sens<-left_join(df.OLS_Sens, df.NWIS.Predictors, by = 'Name')
+
+# now run correlations between intercepts and slopes and watershed characteristics. to do this: (I orginally did this workflow using n_months (C:\PhD\Research\Mohawk\Code\Mohawk_Regression-analyizing_predictor_df.R)
+
+# set up variablefor number of sites:
+
+n_sites<-dim(df.OLS_Sens)[1] 
+
+# use the corrr package to correlate() and focus() on your variable of choice
+
+df.cor <- df.OLS_Sens %>% 
+  correlate() %>% 
+  focus(c(OLS.I, OLS.S, Sen.I, Sen.S))%>%
+  pivot_longer(cols= c(2:5), names_to = 'CQ_Parameter', values_to = 'Pearson_Correlation')%>%
+  mutate(p_val = round(2*pt(-abs(Pearson_Correlation*sqrt((n_sites-2)/(1-(Pearson_Correlation)^2))), n_sites-2),2))%>%
+  mutate(sig_0.05 = ifelse(p_val <= 0.05, 'sig', 'not'))%>%
+  drop_na(p_val) # some standard deviaitons return NA because the watershed characteristic values are zero
+
+# then plotresults: todo this:
+
+# create a list of each CQ parameter (4: OLS and Sens slope and intercept)and format it for ggplotting:
+
+l.cor<-df.cor %>%
+  split(., df.cor$CQ_Parameter)%>%
+  lapply(., \(i) i%>%mutate(term = factor(term, levels = unique(term[order(Pearson_Correlation)])))%>%filter(!between(Pearson_Correlation, -0.25,.25))) # Order by correlation strength
+
+plist<-lapply(l.cor, \(i) i%>%ggplot(aes(x = term, y = Pearson_Correlation, color = sig_0.05)) +
+                geom_bar(stat = "identity") +
+                facet_wrap('CQ_Parameter')+
+                ylab(paste('Pearson Correlation')) +
+                xlab("Watershed Attribute")+
+                theme(axis.text.x=element_text(angle=40,hjust=1))+
+                theme(legend.position="bottom"))
+
+ggpubr::ggarrange(plotlist = plist, ncol=2, nrow=2, common.legend = TRUE, legend="bottom")
+
+# univariate plots of the top correlates/small land use types:
+
+# Lets do plots of OLS slope: to do this:
+
+# determine the top correlates:
+
+OLS<-l.cor[[2]]%>%arrange(desc(Pearson_Correlation))
+
+# make univariate plots (facets) of different land uses and OLS slopes:
+
+df.OLS%>%left_join(.,df.NWIS.Predictors%>%select(Name, Grapes, Cabbage, Woody_Wetlands), by = 'Name')%>%
+  pivot_longer(cols = 4:6, names_to = 'Type', values_to = 'Value')%>%
+  drop_na(Value)%>%
+  ggplot(., aes(x = Value, y = OLS.S))+
+  geom_smooth(method = 'lm')+
+  geom_point()+
+  facet_wrap('Type', scales = 'free')
 
 
+# CQplot of all sites:
 
+ggplot(temp, aes(x = log_Q, y = log_C))+
+  geom_point()+
+  geom_smooth(method = 'lm')+
+  facet_wrap('n_sample_rank')+
+  theme(
+    strip.background = element_blank(),
+    strip.text.x = element_blank()
+  )
+  
+# plot that shows slope and intercept on a map so any spatial correlation would show up?
 
+# merge the lat longs for the sites to df.OLS:
 
-df.NWIS.TP_CQ # df withraw TPCQ observations
-
-
+df.OLS%>%
+  left_join(., df.NWIS.Predictors%>%select(Name, geometry), by = 'Name')%>%
+  st_as_sf(.)%>%
+  mapview(., zcol = 'OLS.S')
 
 
 # finally save image to workspace:

@@ -34,6 +34,14 @@ setTimeout(1000) # for streamstats api
 
 meters_to_miles = 1/1609.334
 
+####################### Load in Prior data #######################
+
+load('Processed_Data/NWIS.Rdata')
+
+# keep only the datasets needed for this script:
+
+rm(list=setdiff(ls(), c("df.NWIS.TP_CQ", "df.G2", "df.sf.NWIS.keep", "df.NWIS.Q")))
+
 ####################### Functions #######################
 
 source("Code/Ryan_functions.R")
@@ -42,11 +50,7 @@ source("Code/Ryan_functions.R")
 
 # 
 
-#######################  #######################
-
-####----Load in data----####
-
-load('Processed_Data/NWIS.Rdata')
+####################### Workflow #######################
 
 # come up with a dataset:
 # Gauges 2 sites in NYS that have TP data that have a time series of TP data:
@@ -175,35 +179,120 @@ temp<-temp[1:35,]%>%
 
 # univariate plots:
 
-d1%>%
-  select(c(site_no, result_va, temp$Predictor))%>% # select the top 35 predictors (in temp)
-  pivot_longer(cols = -c(site_no, result_va), names_to = 'Predictor', values_to = 'Value')%>% # pivot longer to aid ggplot
-  mutate(across(Predictor, factor, levels=temp$Predictor))%>% # add the factor levels based on a rank esabilished in temp to get facets to plot in descending spearman rank value order. 
-  ggplot(., aes(x = Value, y = result_va))+
-  geom_point()+
-  geom_smooth(method = 'lm')+
-  facet_wrap('Predictor', scales = 'free')
+# d1%>%
+#   select(c(site_no, result_va, temp$Predictor))%>% # select the top 35 predictors (in temp)
+#   pivot_longer(cols = -c(site_no, result_va), names_to = 'Predictor', values_to = 'Value')%>% # pivot longer to aid ggplot
+#   mutate(across(Predictor, factor, levels=temp$Predictor))%>% # add the factor levels based on a rank esabilished in temp to get facets to plot in descending spearman rank value order. 
+#   ggplot(., aes(x = Value, y = result_va))+
+#   geom_point()+
+#   geom_smooth(method = 'lm')+
+#   facet_wrap('Predictor', scales = 'free')
 
 ####----Adding Features----####
 
 # I want to add the time sensitive predictors to thedataset:
-# these are antcedent flow and rainfall. 
+# these are antcedent flow, rainfall, and temperature (I will use daily mean temps for all temp variables) 
+# I like the lags and deltas used in Harrison et al (read it in FOR 797)
+# and I like the cummalitve used in Adedeji et al.
+# I think rainfall will capture most of the concerns with flow?
+# Im just going to pick a few and run with it:
 
-# Starting with flow:
+# Flows: 
 
-# 
+# flow on day of, and 1,2,3,4,5,10,14,21 days prior to the sample
+# delta flow between day of sample and 1,2,3,4,5, 10, 14, 21, days prior to sample
 
+# Daily flows are already apired with the CQ observations
+# To do antecdent flows the raw daily data is needed. This as already downloaded for the TP sites in NWIS.R
 
+# filter all TP sites rawdaily flow data to the 55 sites in d1:
 
+df.ML_NWIS.Q<-df.NWIS.Q%>%filter(site_no %in% d1$site_no)
 
+# Each site+date is going to have 8+8 (lag+delta) = 16 flow features
 
+# initalize a dataframe:
 
+lag_deltas<-c(0,1,2,3,4,5,10,14,21)
 
+lag_deltas_char<-as.character(lag_deltas)
 
+lag_names<-paste0('Flow_lag_', lag_deltas_char, '_day')
 
-# save.image(file = 'Processed_Data/ML_NWIS.Rdata')
+delta_names<-paste0('Flow_delta_', lag_deltas_char, '_day')
+
+columnnames<-c('site_no', 'Date', lag_names, delta_names)
+
+df.ML_NWIS.Q_features<-setNames(data.frame(matrix(ncol = length(x), nrow = 1)), columnnames)
+
+# loop through the sites and extract the features:
+
+for(i in seq_along(unique(d1$site_no))){
   
+  # filter the flows for a site:
+  
+  df.Q<-filter(df.ML_NWIS.Q, site_no == unique(d1$site_no)[i])
+  
+  # filter the samples for the site:
+  
+  df.C<-filter(d1, site_no == unique(d1$site_no)[i])
+  
+  # filter this down to unique dates. If there are more than one sample on a given date, take the mean:
+  
+  df.C<-df.C%>%group_by(sample_dt)%>%summarise(result_va_mean = mean(result_va))
+  
+  # loop through the samples dates:
+  
+  for (j in seq_along(df.C$sample_dt)){
+    
+    # determine 0,1,2,3,...21 days prior to sample date:
+    
+    dates<-as.data.frame(df.C$sample_dt[j]-lag_deltas)%>%rename(Date = 1)
+    
+    # extract subset of flow dataframe for the dates upto the 21 days prior:
+    
+    Q.j <- left_join(dates, df.Q, by = 'Date')
+    
+    # calcualte deltas:
+    
+    delta.j<-c(0,Q.j$X_00060_00003[-1]-Q.j$X_00060_00003[1])
+    
+    # Make wide dataframes of the lags and delta
+      
+    lag.j<-data.frame(site_no = unique(d1$site_no)[i], Date = df.C$sample_dt[j], lag = Q.j$X_00060_00003, name = lag_names) %>%
+      pivot_wider(names_from = name, values_from = lag)
+    
+    delta.j<-data.frame(site_no = unique(d1$site_no)[i], Date = df.C$sample_dt[j], delta = delta.j, name = delta_names) %>%
+      pivot_wider(names_from = name, values_from = delta)
+    
+    # merge these two:
+    
+    df.j<-left_join(lag.j,delta.j,by = c('site_no', 'Date'))
+    
+    # append to outside df:
+    
+    df.ML_NWIS.Q_features<-bind_rows(df.ML_NWIS.Q_features, df.j)
+    
+  }
+  
+}
 
+# checkthis
+
+
+# Rainfall:
+
+# 1(24 hr),2,3,4,5,10,14 and 21 day cumulative rainfall prior to sample date
+
+
+
+
+
+
+
+save.image(file = 'Processed_Data/ML_NWIS.Rdata')
+  
+# load("Processed_Data/ML_NWIS.Rdata")
 
 
 

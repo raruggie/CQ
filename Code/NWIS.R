@@ -651,6 +651,23 @@ df.NWIS.Predictors<-left_join(df.NWIS.CDL,df.NWIS.DEM, by = 'Name')%>%left_join(
 
 ##### Correlations
 
+# in the first pass, all predictors were included
+# in a second pass, predictors with lots of zeros are removed:
+
+# second pass filter:
+# select only numeric columns in df.NWIS.predictors:
+x<-df.NWIS.Predictors%>%dplyr::select(where(is.numeric))
+#set NAs to zero:
+x[is.na(x)] <- 0
+# determine the percentage of cells which are zero in eachcolumn, 
+# turn into a dataframe, 
+# pivot longer,
+# filter for predictors with greater than 50% of observations being zero:
+x<-lapply(x, function(x){ length(which(x==0))/length(x)})%>%
+  bind_rows(.)%>%
+  pivot_longer(cols = everything(), values_to = 'Value', names_to = 'Type')%>%
+  filter(Value > .5)
+
 # set up a datatframe to feed into eachOLSand sens pipes:
 
 # combined the predictors df with the cq data:
@@ -686,8 +703,9 @@ df.Sens<-temp%>%
 df.OLS_Sens<-left_join(df.OLS, df.Sens, by = 'Name')
 
 # merge back the watershed characteristic data to this dataframe:
+# for a second pass, deselect the columns names in x:
 
-df.OLS_Sens<-left_join(df.OLS_Sens, df.NWIS.Predictors, by = 'Name')
+df.OLS_Sens<-left_join(df.OLS_Sens, df.NWIS.Predictors%>%select(-x$Type), by = 'Name')
 
 # now run correlations between intercepts and slopes and watershed characteristics. to do this: (I orginally did this workflow using n_months (C:\PhD\Research\Mohawk\Code\Mohawk_Regression-analyizing_predictor_df.R)
 
@@ -733,8 +751,8 @@ OLS<-l.cor[[2]]%>%arrange(desc(Pearson_Correlation))
 
 # make univariate plots (facets) of different land uses and OLS slopes:
 
-df.OLS%>%left_join(.,df.NWIS.Predictors%>%select(Name, Grapes, Cabbage, Woody_Wetlands), by = 'Name')%>%
-  pivot_longer(cols = 4:6, names_to = 'Type', values_to = 'Value')%>%
+df.OLS%>%left_join(.,df.NWIS.Predictors%>%select(c(Name, OLS$term)), by = 'Name')%>%
+  pivot_longer(cols = 4:10, names_to = 'Type', values_to = 'Value')%>%
   drop_na(Value)%>%
   ggplot(., aes(x = Value, y = OLS.S))+
   geom_smooth(method = 'lm')+

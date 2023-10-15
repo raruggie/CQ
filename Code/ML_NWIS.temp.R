@@ -102,7 +102,7 @@ x<-df.NWIS.TP_CQ%>%
 
 # map of these 43:
 
-filter(df.sf.NWIS.keep, Name %in% x$site_no)[i,]%>%mapview(.)
+# filter(df.sf.NWIS.keep, Name %in% x$site_no)%>%mapview(.)
 
 filter(df.sf.NWIS.keep, Name %in% x$site_no)%>%st_is_valid()
 
@@ -261,9 +261,15 @@ columnnames<-c('site_no', 'Date', rain_colnames, tmax_lag_colnames, tmax_delta_c
 
 df.ML_NWIS.Climate_features<-setNames(data.frame(matrix(ncol = length(columnnames), nrow = 1)), columnnames)
 
-# loop through the climate variables:
+# save the crs of a getGRIDmet product:
 
-i<-19
+GRIDMET_crs<-"GEOGCRS[\"unknown\",\n    DATUM[\"unknown\",\n        ELLIPSOID[\"WGS 84\",6378137,298.257223563,\n            LENGTHUNIT[\"metre\",1,\n                ID[\"EPSG\",9001]]]],\n    PRIMEM[\"unknown\",0,\n        ANGLEUNIT[\"degree\",0.0174532925199433,\n            ID[\"EPSG\",9122]]],\n    CS[ellipsoidal,2],\n        AXIS[\"longitude\",east,\n            ORDER[1],\n            ANGLEUNIT[\"degree\",0.0174532925199433,\n                ID[\"EPSG\",9122]]],\n        AXIS[\"latitude\",north,\n            ORDER[2],\n            ANGLEUNIT[\"degree\",0.0174532925199433,\n                ID[\"EPSG\",9122]]]]"
+
+# reproject vect.NWIS:
+
+vect.NWIS.proj<-terra::project(vect.NWIS, GRIDMET_crs)
+
+i<-1
 j<-1
 k<-1
 
@@ -273,20 +279,76 @@ for (i in 1:dim(vect.NWIS)[1]){
   # save the samples with their dates for the watershed:
   df.C.j<-filter(df.NWIS.TP_CQ, site_no == vect.NWIS$Name[i])%>%
     drop_na(sample_dt)
+  # getGRIDMET only goes back as far as 1979-01-01 so if the sample dates are before that omit site. Add 21 because that is the maximum number of days backto look:
+  start_date<-min(df.C.j$sample_dt[df.C.j$sample_dt >= as.Date('1979-01-01')+21])-21
+  end_date<-max(df.C.j$sample_dt[df.C.j$sample_dt >= as.Date('1979-01-01')+21])
   # download the climate data for the full range of sample dates for this site:
-  rast.pr<-getGridMET(vect.NWIS[i,], varname = vars[1], startDate = as.character(min(df.C.j$sample_dt[j])), endDate = as.character(max(df.C.j$sample_dt[j])))[[1]]
-  rast.tmax<-getGridMET(vect.NWIS[i,], varname = vars[1], startDate = as.character(min(df.C.j$sample_dt[j])), endDate = as.character(max(df.C.j$sample_dt[j])))[[1]]
-  rast.tmin<-getGridMET(vect.NWIS[i,], varname = vars[1], startDate = as.character(min(df.C.j$sample_dt[j])), endDate = as.character(max(df.C.j$sample_dt[j])))[[1]]
+  rast.pr<-getGridMET(vect.NWIS[i,], varname = vars[1], startDate = start_date, endDate = end_date)[[1]]
+  rast.tmax<-getGridMET(vect.NWIS[i,], varname = vars[2], startDate = start_date, endDate = end_date)[[1]]
+  rast.tmin<-getGridMET(vect.NWIS[i,], varname = vars[3], startDate = start_date, endDate = end_date)[[1]]
+  # if the download doesnt work, omit site: (when i=19, the download function returns and object of class 'glue'. no idea)
+  if (class(rast.pr)[1]=="SpatRaster" & class(rast.tmax)[1]=="SpatRaster" & class(rast.tmin)[1]=="SpatRaster"){
+    # extract:
+    df.pr <- terra::extract(rast.pr, vect.NWIS.proj[i,], mean)
+    df.tmax <- terra::extract(rast.tmax, vect.NWIS.proj[i,], mean)
+    df.tmin <- terra::extract(rast.tmin, vect.NWIS.proj[i,], mean)
+    # reformat to convert dates, and merge with sample dates:
+    df.pr.1<-df.pr%>%
+      pivot_longer(cols= starts_with(paste0(vars[1],"_")), names_to = 'Date',values_to = "Value")%>%
+      mutate(Date=as.Date(str_replace(Date, paste0(vars[1],"_"), "")))%>%
+      arrange(desc(Date))%>%
+      select(-ID)
+    df.tmax.1<-df.tmax%>%
+      pivot_longer(cols= starts_with(paste0(vars[2],"_")), names_to = 'Date',values_to = "Value")%>%
+      mutate(Date=as.Date(str_replace(Date, paste0(vars[2],"_"), "")))%>%
+      arrange(desc(Date))%>%
+      select(-ID)
+    df.tmin.1<-df.tmin%>%
+      pivot_longer(cols= starts_with(paste0(vars[3],"_")), names_to = 'Date',values_to = "Value")%>%
+      mutate(Date=as.Date(str_replace(Date, paste0(vars[3],"_"), "")))%>%
+      arrange(desc(Date))%>%
+      select(-ID)
+    # merge all climate variable dfs:
+    df<-left_join(df.pr.1, df.tmax.1, by = 'Date')%>%left_join(.,df.tmin.1, by= 'Date')%>%
+      rename(pr = 2, tmax = 3, tmin = 4)
+    # create dataranges for the samples
+    sample_dates<-filter(df, Date %in% df.C.j$sample_dt)
+      
+    x<-lapply(sample_dates$Date, \(i) seq(i-21, i, by = 1))
+      seq(sample_dates$Date-21, sample_dates$Date, by = 1)
+    
+    rain = round(cumsum(df$pr)[rain_cum_and_temp_deltas],2)
+    
+    df.rain<-data.frame(Name = rain_colnames, Value = round(cumsum(df.climate.k.1$Value)[rain_cum_and_temp_deltas],2))%>%
+      pivot_wider(names_from = Name, values_from = Value)%>%
+      mutate(site_no = vect.NWIS$Name[i], Date = df.C.j$sample_dt[j], .before = 1)
+    
+    # loop through the sample dates for the watershed:
+    for (j in seq_along(df.C.j$sample_dt)){
+      
+      
+      
+    }
+    
+    
+    
+    
+    
+    
+  } else{print(i); print(c(class(rast.pr), class(rast.tmax), class(rast.tmin)))}
+
   
-  # loop through the sample dates for the watershed:
-  for (j in seq_along(df.C.j$sample_dt)){
+  
+    
+    
+    
     # loop through the climate variables
     for (k in seq_along(vars)){
       # getGRIDMET only goes back as far as 1979-01-01 so if the sample date is before that omit:
       if (df.C.j$sample_dt[j] >= as.Date('1979-01-01')){
         # download:
         rast.climate.k<-getGridMET(vect.NWIS[i,], varname = vars[k], startDate = as.character(df.C.j$sample_dt[j]-21), endDate = as.character(df.C.j$sample_dt[j]))[[1]]
-        # if the download doesnt work, omit: (when i=19, the download function returns and object of class 'glue'. no idea)
+        
         if (class(rast.climate.k)[1]=="SpatRaster"){
           # reproject for extract:
           vect.NWIS.proj<-terra::project(vect.NWIS[i,], crs(rast.climate.k))
@@ -393,8 +455,6 @@ for (i in 1:dim(vect.NWIS)[1]){
 }
 
 save(df.ML_NWIS.Climate_features, file = 'Processed_Data/df.ML_NWIS.Climate_features.Rdata')
-
-# didnt finish, I stopped it: i @37, j@989
 
 # takelook around thisdataframe, see which watersheds/dates are not represented:
 

@@ -269,9 +269,7 @@ GRIDMET_crs<-"GEOGCRS[\"unknown\",\n    DATUM[\"unknown\",\n        ELLIPSOID[\"
 
 vect.NWIS.proj<-terra::project(vect.NWIS, GRIDMET_crs)
 
-i<-1
-j<-1
-k<-1
+i<-19
 
 # loop through the watersheds:
 
@@ -279,191 +277,175 @@ for (i in 1:dim(vect.NWIS)[1]){
   # save the samples with their dates for the watershed:
   df.C.j<-filter(df.NWIS.TP_CQ, site_no == vect.NWIS$Name[i])%>%
     drop_na(sample_dt)
-  # getGRIDMET only goes back as far as 1979-01-01 so if the sample dates are before that omit site. Add 21 because that is the maximum number of days backto look:
-  start_date<-min(df.C.j$sample_dt[df.C.j$sample_dt >= as.Date('1979-01-01')+21])-21
-  end_date<-max(df.C.j$sample_dt[df.C.j$sample_dt >= as.Date('1979-01-01')+21])
-  # download the climate data for the full range of sample dates for this site:
-  rast.pr<-getGridMET(vect.NWIS[i,], varname = vars[1], startDate = start_date, endDate = end_date)[[1]]
-  rast.tmax<-getGridMET(vect.NWIS[i,], varname = vars[2], startDate = start_date, endDate = end_date)[[1]]
-  rast.tmin<-getGridMET(vect.NWIS[i,], varname = vars[3], startDate = start_date, endDate = end_date)[[1]]
-  # if the download doesnt work, omit site: (when i=19, the download function returns and object of class 'glue'. no idea)
-  if (class(rast.pr)[1]=="SpatRaster" & class(rast.tmax)[1]=="SpatRaster" & class(rast.tmin)[1]=="SpatRaster"){
-    # extract:
-    df.pr <- terra::extract(rast.pr, vect.NWIS.proj[i,], mean)
-    df.tmax <- terra::extract(rast.tmax, vect.NWIS.proj[i,], mean)
-    df.tmin <- terra::extract(rast.tmin, vect.NWIS.proj[i,], mean)
-    # reformat to convert dates, and merge with sample dates:
-    df.pr.1<-df.pr%>%
-      pivot_longer(cols= starts_with(paste0(vars[1],"_")), names_to = 'Date',values_to = "Value")%>%
-      mutate(Date=as.Date(str_replace(Date, paste0(vars[1],"_"), "")))%>%
-      arrange(desc(Date))%>%
-      select(-ID)
-    df.tmax.1<-df.tmax%>%
-      pivot_longer(cols= starts_with(paste0(vars[2],"_")), names_to = 'Date',values_to = "Value")%>%
-      mutate(Date=as.Date(str_replace(Date, paste0(vars[2],"_"), "")))%>%
-      arrange(desc(Date))%>%
-      select(-ID)
-    df.tmin.1<-df.tmin%>%
-      pivot_longer(cols= starts_with(paste0(vars[3],"_")), names_to = 'Date',values_to = "Value")%>%
-      mutate(Date=as.Date(str_replace(Date, paste0(vars[3],"_"), "")))%>%
-      arrange(desc(Date))%>%
-      select(-ID)
-    # merge all climate variable dfs:
-    df<-left_join(df.pr.1, df.tmax.1, by = 'Date')%>%left_join(.,df.tmin.1, by= 'Date')%>%
-      rename(pr = 2, tmax = 3, tmin = 4)
-    # create dataranges for the samples
-    sample_dates<-filter(df, Date %in% df.C.j$sample_dt)
-      
-    x<-lapply(sample_dates$Date, \(i) seq(i-21, i, by = 1))
-      seq(sample_dates$Date-21, sample_dates$Date, by = 1)
-    
-    rain = round(cumsum(df$pr)[rain_cum_and_temp_deltas],2)
-    
-    df.rain<-data.frame(Name = rain_colnames, Value = round(cumsum(df.climate.k.1$Value)[rain_cum_and_temp_deltas],2))%>%
-      pivot_wider(names_from = Name, values_from = Value)%>%
-      mutate(site_no = vect.NWIS$Name[i], Date = df.C.j$sample_dt[j], .before = 1)
-    
-    # loop through the sample dates for the watershed:
-    for (j in seq_along(df.C.j$sample_dt)){
-      
-      
-      
-    }
-    
-    
-    
-    
-    
-    
-  } else{print(i); print(c(class(rast.pr), class(rast.tmax), class(rast.tmin)))}
+  # getGRIDMET only goes back as far as 1979-01-01 so if the sample dates are before that omit site
+  # first make sure at least one sample date is good:
+  if (sum(df.C.j$sample_dt >= as.Date('1979-01-01'))>=1){
+    # set start and end dates for the climate downloads. Add 21 because that is the maximum number of days backto look:
+    start_date<-min(df.C.j$sample_dt[df.C.j$sample_dt >= as.Date('1979-01-01')+21])-21
+    end_date<-max(df.C.j$sample_dt[df.C.j$sample_dt >= as.Date('1979-01-01')+21])
+    # download the climate data for the full range of sample dates for this site:
+    rast.pr<-getGridMET(vect.NWIS[i,], varname = vars[1], startDate = start_date, endDate = end_date)[[1]]
+    rast.tmax<-getGridMET(vect.NWIS[i,], varname = vars[2], startDate = start_date, endDate = end_date)[[1]]
+    rast.tmin<-getGridMET(vect.NWIS[i,], varname = vars[3], startDate = start_date, endDate = end_date)[[1]]
+    # if the download doesnt work, omit site: (when i=19, the download function returns and object of class 'glue'. no idea)
+    if (class(rast.pr)[1]=="SpatRaster" & class(rast.tmax)[1]=="SpatRaster" & class(rast.tmin)[1]=="SpatRaster"){
+      # extract:
+      df.pr <- terra::extract(rast.pr, vect.NWIS.proj[i,], mean)
+      df.tmax <- terra::extract(rast.tmax, vect.NWIS.proj[i,], mean)
+      df.tmin <- terra::extract(rast.tmin, vect.NWIS.proj[i,], mean)
+      # create a list of these dfs:
+      l.climate<-list(df.pr, df.tmax, df.tmin)
+      # reformat to convert dates, and merge with sample dates:
+      l.climate<-lapply(seq_along(l.climate), \(i) l.climate[[i]]%>%pivot_longer(cols= starts_with(paste0(vars[i],"_")), names_to = 'Date',values_to = "Value")%>%
+                          mutate(Date=as.Date(str_replace(Date, paste0(vars[i],"_"), "")), Climate = vars[i])%>%
+                          arrange(desc(Date))%>%
+                          select(-ID)
+      )
+      # create dataframe of these listsand pivot_wider:
+      df.climate<-bind_rows(l.climate)%>%
+        pivot_wider(names_from = Climate, values_from = Value)
+      # determine the sample dates:
+      sample_dates<-filter(df.climate, Date %in% df.C.j$sample_dt)
+      # create list of the 21 day prior date ranges for the sample dates, and merge the climate variables for the dates for each sample dates 21 day dataframe:
+      l.sample_dates<-lapply(sample_dates$Date, \(i) data.frame(Date=seq(i-21, i, by = 1))%>%
+                             arrange(desc(Date))%>%
+                             left_join(., df.climate, by = 'Date'))
+      # perform operations on each sample date using lapply and a function (sourced):
+      l.sample_dates<-lapply(l.sample_dates, \(i) fun.Process_climate(i, site = vect.NWIS$Name[i], date = max(i$Date)))
+      # bind list of dataframes into a single df:
+      df.sample_dates<-bind_rows(l.sample_dates)
+      # append this dataframe to master df:
+      df.ML_NWIS.Climate_features<-bind_rows(df.ML_NWIS.Climate_features, df.sample_dates)
+    }else{print(i); print(vect.NWIS$Name[i]); print(c(class(rast.pr), class(rast.tmax), class(rast.tmin)))}
+  }else{print(i); print(vect.NWIS$Name[i]); print('none of site dates will work with getGRIDMet')}
+}  
+  
+# remove the first row
+  
+df.ML_NWIS.Climate_features<-df.ML_NWIS.Climate_features[-1,]  
 
-  
-  
-    
-    
-    
-    # loop through the climate variables
-    for (k in seq_along(vars)){
-      # getGRIDMET only goes back as far as 1979-01-01 so if the sample date is before that omit:
-      if (df.C.j$sample_dt[j] >= as.Date('1979-01-01')){
-        # download:
-        rast.climate.k<-getGridMET(vect.NWIS[i,], varname = vars[k], startDate = as.character(df.C.j$sample_dt[j]-21), endDate = as.character(df.C.j$sample_dt[j]))[[1]]
-        
-        if (class(rast.climate.k)[1]=="SpatRaster"){
-          # reproject for extract:
-          vect.NWIS.proj<-terra::project(vect.NWIS[i,], crs(rast.climate.k))
-          # extract:
-          df.climate.k <- terra::extract( rast.climate.k, vect.NWIS.proj, mean)
-          # reformat to convert dates:
-          df.climate.k.1<-df.climate.k%>%
-            pivot_longer(cols= starts_with(paste0(vars[k],"_")), names_to = 'Date',values_to = "Value")%>%
-            mutate(Date=as.Date(str_replace(Date, paste0(vars[k],"_"), "")))%>%
-            arrange(desc(Date))
-          # use logical statements to determine what to do this with info:
-          if (k == 1){
-            # create dataframe of the rain column names and theirvalues using cumsum and subseting vector using the vector of rain_cum_and_temp_deltas (prior to loo)
-            df.rain<-data.frame(Name = rain_colnames, Value = round(cumsum(df.climate.k.1$Value)[rain_cum_and_temp_deltas],2))%>%
-              pivot_wider(names_from = Name, values_from = Value)%>%
-              mutate(site_no = vect.NWIS$Name[i], Date = df.C.j$sample_dt[j], .before = 1)
-          }
-          if (k == 2){
-            df.tmax.lag<-data.frame(Name = tmax_lag_colnames, Value = df.climate.k.1$Value[temp_lags+1])%>%
-              pivot_wider(names_from = Name, values_from = Value)%>%
-              mutate(site_no = vect.NWIS$Name[i], Date = df.C.j$sample_dt[j], .before = 1)
-            df.tmax.delta<-data.frame(Name = tmax_delta_colnames, Value = round(df.climate.k.1$Value[rain_cum_and_temp_deltas+1]-df.climate.k.1$Value[1],2))%>%
-              pivot_wider(names_from = Name, values_from = Value)%>%
-              mutate(site_no = vect.NWIS$Name[i], Date = df.C.j$sample_dt[j], .before = 1)
-            df.tmax<-merge(df.tmax.lag, df.tmax.delta)
-          }
-          if (k == 3){
-            df.tmin.lag<-data.frame(Name = tmin_lag_colnames, Value = df.climate.k.1$Value[temp_lags+1])%>%
-              pivot_wider(names_from = Name, values_from = Value)%>%
-              mutate(site_no = vect.NWIS$Name[i], Date = df.C.j$sample_dt[j], .before = 1)
-            df.tmin.delta<-data.frame(Name = tmin_delta_colnames, Value = df.climate.k.1$Value[rain_cum_and_temp_deltas+1]-df.climate.k.1$Value[1])%>%
-              pivot_wider(names_from = Name, values_from = Value)%>%
-              mutate(site_no = vect.NWIS$Name[i], Date = df.C.j$sample_dt[j], .before = 1)
-            df.tmin<-merge(df.tmin.lag, df.tmin.delta)
-          }
-        } 
-        else {
-          # print(vect.NWIS$Name[i])
-          # print(df.C.j$sample_dt[j])
-          # print(vars[k])
-          # print('bad download')
-          df.rain<-structure(list(site_no = NA_character_, Date = structure(NA_real_, class = "Date"), 
-                                  Rain_cummulative_1_day = NA_real_, Rain_cummulative_2_day = NA_real_, 
-                                  Rain_cummulative_3_day = NA_real_, Rain_cummulative_4_day = NA_real_, 
-                                  Rain_cummulative_5_day = NA_real_, Rain_cummulative_10_day = NA_real_, 
-                                  Rain_cummulative_14_day = NA_real_, Rain_cummulative_21_day = NA_real_), row.names = c(NA, 
-                                                                                                                         -1L), class = c("tbl_df", "tbl", "data.frame"))
-          df.tmax<-structure(list(site_no = NA_character_, Date = structure(NA_real_, class = "Date"), 
-                                  Tmax_lag_0_day = NA_real_, Tmax_lag_1_day = NA_real_, Tmax_lag_2_day = NA_real_, 
-                                  Tmax_lag_3_day = NA_real_, Tmax_lag_4_day = NA_real_, Tmax_lag_5_day = NA_real_, 
-                                  Tmax_lag_10_day = NA_real_, Tmax_lag_14_day = NA_real_, Tmax_lag_21_day = NA_real_, 
-                                  Tmax_delta_1_day = NA_real_, Tmax_delta_2_day = NA_real_, 
-                                  Tmax_delta_3_day = NA_real_, Tmax_delta_4_day = NA_real_, 
-                                  Tmax_delta_5_day = NA_real_, Tmax_delta_10_day = NA_real_, 
-                                  Tmax_delta_14_day = NA_real_, Tmax_delta_21_day = NA_real_), row.names = c(NA, 
-                                                                                                             -1L), class = "data.frame")
-          df.tmin<-structure(list(site_no = NA_character_, Date = structure(NA_real_, class = "Date"), 
-                                  Tmin_lag_0_day = NA_real_, Tmin_lag_1_day = NA_real_, Tmin_lag_2_day = NA_real_, 
-                                  Tmin_lag_3_day = NA_real_, Tmin_lag_4_day = NA_real_, Tmin_lag_5_day = NA_real_, 
-                                  Tmin_lag_10_day = NA_real_, Tmin_lag_14_day = NA_real_, Tmin_lag_21_day = NA_real_, 
-                                  Tmin_delta_1_day = NA_real_, Tmin_delta_2_day = NA_real_, 
-                                  Tmin_delta_3_day = NA_real_, Tmin_delta_4_day = NA_real_, 
-                                  Tmin_delta_5_day = NA_real_, Tmin_delta_10_day = NA_real_, 
-                                  Tmin_delta_14_day = NA_real_, Tmin_delta_21_day = NA_real_), row.names = c(NA, 
-                                                                                                             -1L), class = "data.frame")
-        }
-      }
-      else{
-        # print(vect.NWIS$Name[i])
-        # print(df.C.j$sample_dt[j])
-        # print(vars[k])
-        # print('bad date')
-        df.rain<-structure(list(site_no = NA_character_, Date = structure(NA_real_, class = "Date"), 
-                                Rain_cummulative_1_day = NA_real_, Rain_cummulative_2_day = NA_real_, 
-                                Rain_cummulative_3_day = NA_real_, Rain_cummulative_4_day = NA_real_, 
-                                Rain_cummulative_5_day = NA_real_, Rain_cummulative_10_day = NA_real_, 
-                                Rain_cummulative_14_day = NA_real_, Rain_cummulative_21_day = NA_real_), row.names = c(NA, 
-                                                                                                                       -1L), class = c("tbl_df", "tbl", "data.frame"))
-        df.tmax<-structure(list(site_no = NA_character_, Date = structure(NA_real_, class = "Date"), 
-                                Tmax_lag_0_day = NA_real_, Tmax_lag_1_day = NA_real_, Tmax_lag_2_day = NA_real_, 
-                                Tmax_lag_3_day = NA_real_, Tmax_lag_4_day = NA_real_, Tmax_lag_5_day = NA_real_, 
-                                Tmax_lag_10_day = NA_real_, Tmax_lag_14_day = NA_real_, Tmax_lag_21_day = NA_real_, 
-                                Tmax_delta_1_day = NA_real_, Tmax_delta_2_day = NA_real_, 
-                                Tmax_delta_3_day = NA_real_, Tmax_delta_4_day = NA_real_, 
-                                Tmax_delta_5_day = NA_real_, Tmax_delta_10_day = NA_real_, 
-                                Tmax_delta_14_day = NA_real_, Tmax_delta_21_day = NA_real_), row.names = c(NA, 
-                                                                                                           -1L), class = "data.frame")
-        df.tmin<-structure(list(site_no = NA_character_, Date = structure(NA_real_, class = "Date"), 
-                                Tmin_lag_0_day = NA_real_, Tmin_lag_1_day = NA_real_, Tmin_lag_2_day = NA_real_, 
-                                Tmin_lag_3_day = NA_real_, Tmin_lag_4_day = NA_real_, Tmin_lag_5_day = NA_real_, 
-                                Tmin_lag_10_day = NA_real_, Tmin_lag_14_day = NA_real_, Tmin_lag_21_day = NA_real_, 
-                                Tmin_delta_1_day = NA_real_, Tmin_delta_2_day = NA_real_, 
-                                Tmin_delta_3_day = NA_real_, Tmin_delta_4_day = NA_real_, 
-                                Tmin_delta_5_day = NA_real_, Tmin_delta_10_day = NA_real_, 
-                                Tmin_delta_14_day = NA_real_, Tmin_delta_21_day = NA_real_), row.names = c(NA, 
-                                                                                                           -1L), class = "data.frame")
-      }
-    }
-    # combine the three dataframes made in the k prior loop:
-    df.ij.row<-merge(df.rain, df.tmax)%>%merge(.,df.tmin)
-    # append to master df:
-    df.ML_NWIS.Climate_features<-bind_rows(df.ML_NWIS.Climate_features, df.ij.row)
-  }
-}
+# save:
 
 save(df.ML_NWIS.Climate_features, file = 'Processed_Data/df.ML_NWIS.Climate_features.Rdata')
 
+load('Processed_Data/df.ML_NWIS.Climate_features.Rdata')
+
 # takelook around thisdataframe, see which watersheds/dates are not represented:
 
+filter(df.NWIS.TP_CQ, site_no %in% vect.NWIS$Name)%>%distinct(site_no)
+unique(df.ML_NWIS.Climate_features$site_no)
+# 42 of the 42 sites arerpresented
+
+a<-filter(df.NWIS.TP_CQ, site_no %in% vect.NWIS$Name)%>%group_by(site_no)%>%summarize(n=n())
+b<-df.ML_NWIS.Climate_features%>%group_by(site_no)%>%summarize(n=n())
+
+c<-left_join(a,b,by = 'site_no')
+
+sum(c$n.x==c$n.y, na.rm = T) # only two sites worked 'fully' but this is proably due to the samples being before 1979
+
+#### create list of the 5 predictor sets: ####
+
+# read in an edited version of the gauges 2 features (removed time specific climatevariables because those were comming up as highly correlated with TP):
+
+df.G2_edited <- read_excel_allsheets("Raw_Data/gagesII_sept30_2011_conterm_EDITED.xlsx")
+df.G2_edited[[24]]<-NULL
+df.G2_edited<-reduce(df.G2_edited, full_join, by = "STAID")
+
+# Full predictor set (Non-time + time specific features (sites are in gauges 2 and have delineations, i.e. full amount of data)
+
+Full<-left_join(df.ML_NWIS.Climate_features, df.ML_NWIS.Q_features, by = c('site_no', 'Date'))%>%
+  left_join(., df.G2_edited, by = c('site_no'="STAID"))
+
+# non-time specific features + flow (sites are in gauges 2, have flow, but have no delineation)
+
+No_delineations<-left_join(df.ML_NWIS.Q_features, df.G2_edited,  by = c('site_no'="STAID"))
+
+# Just time specific features (sites are not in gauges 2 but have flow and delinations )
+
+Just_time<-left_join(df.ML_NWIS.Climate_features, df.ML_NWIS.Q_features, by = c('site_no', 'Date'))
+
+# Just the flow component of the time specific features (sites are not in gauges 2 and have no delineation, but have flow)
+
+Just_flow<-df.ML_NWIS.Q_features
+
+# Just non-time specific features (sites are in gauges 2 but have no flow and no delineation - I understand that if a site is in gauges 2 it will have flow, but this situation is mimics when we might recreate the gauges 2 features ourselves)
+
+Just_non_time<-filter(df.G2_edited, STAID %in% x$site_no)
+
+# create a list of these dfs:
+
+l.feature_sets<-list(Full, No_delineations, Just_time, Just_flow, Just_non_time)
+
+# rename the date column of raw tp df:
+
+temp<-rename(df.NWIS.TP_CQ, Date = sample_dt)%>%
+  select(c(site_no, Date, result_va))
+
+# merge the raw TP data to these dfs: (wouldnt work with lapply, proably causethe conditional needed)
+
+l<-list()
+
+for(i in seq_along(l.feature_sets)){
+  print(i)
+  if('Date' %in% names(l.feature_sets[[i]])){
+    l[[i]]<-left_join(temp, l.feature_sets[[i]], by = c('site_no', 'Date'))
+  }
+  else {
+    l[[i]]<-left_join(temp, l.feature_sets[[i]], by = c('site_no'='STAID'))
+  }
+  
+}
 
 
-# create list of the 5 predictor sets:
+# save.image(file = 'Processed_Data/ML_NWIS.Rdata')
 
-Full<-
+load("Processed_Data/ML_NWIS.Rdata")
 
+
+
+#### Correlations for each set #####
+
+# remove non numeric/non date columns:
+
+l.cor<-lapply(l, \(df) df[,-which(sapply(df, class) == "character")])
+
+# remove rows with NAs from each df in list (get complete observations)
+
+l.cor<-lapply(l.cor, \(final) final[complete.cases(final), ])
+
+# filter to just numeric columns:
+
+l.cor<-lapply(l.cor, \(i) i%>%select_if(is.numeric))
+
+# perform cor of dataframe:
+
+l.cor.temp<-lapply(l.cor, \(temp) as.data.frame(cor(temp[-1], temp[1],use="complete.obs", method = 'spearman')))
+
+# create column of row names (which are the predictor names) and set the row names to 1:n:
+# arrange by abs(spearman rank correlation):
+
+l.cor.temp.1<-lapply(l.cor.temp, \(temp) temp%>%mutate(Predictor=rownames(temp))%>%arrange(temp, desc(abs(result_va))))
+
+
+# create a seperate df for the top 35 and add a rankcolumn:
+temp<-lapply(l.cor.temp.1, \(temp) temp[1:35,]%>%
+  arrange(desc(result_va))%>%
+  mutate(Spear_Rank = 1:35)%>%
+  mutate(Spear_Rank_name = paste(Spear_Rank, Predictor))
+)
+
+# univariate plots:
+
+d1<-temp[[1]]
+
+d1%>%
+  select(c(site_no, result_va, temp$Predictor))%>% # select the top 35 predictors (in temp)
+  pivot_longer(cols = -c(site_no, result_va), names_to = 'Predictor', values_to = 'Value')%>% # pivot longer to aid ggplot
+  mutate(across(Predictor, factor, levels=temp$Predictor))%>% # add the factor levels based on a rank esabilished in temp to get facets to plot in descending spearman rank value order.
+  ggplot(., aes(x = Value, y = result_va))+
+  geom_point()+
+  geom_smooth(method = 'lm')+
+  facet_wrap('Predictor', scales = 'free')
 
 
 

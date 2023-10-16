@@ -273,5 +273,29 @@ read_excel_allsheets <- function(filename, tibble = FALSE) {
   x
 }
 
+# function to take dataframe(s) of 21 day climate lags and turn into a single 1 row df of the processed climate variables:
+
+fun.Process_climate<-function(df, site, date){
+  #make single row dataframes for the processed climate variables:
+  # precip
+  df.rain<-data.frame(Name = rain_colnames, Value = round(cumsum(df$pr)[rain_cum_and_temp_deltas],2))%>%
+    pivot_wider(names_from = Name, values_from = Value)
+  # tmax lag
+  df.tmax.lag<-data.frame(Name = tmax_lag_colnames, Value = round(df$tmmx[temp_lags+1],2))%>%
+    pivot_wider(names_from = Name, values_from = Value)
+  # tmax delta
+  df.tmax.delta<-data.frame(Name = tmax_delta_colnames, Value = round(df$tmmx[rain_cum_and_temp_deltas+1]-df$tmmx[1],2))%>%
+    pivot_wider(names_from = Name, values_from = Value)
+  # tmin lag
+  df.tmin.lag<-data.frame(Name = tmin_lag_colnames, Value = df$tmmn[temp_lags+1])%>%
+    pivot_wider(names_from = Name, values_from = Value)
+  # tmin delta
+  df.tmin.delta<-data.frame(Name = tmin_delta_colnames, Value = round(df$tmmn[rain_cum_and_temp_deltas+1]-df$tmmn[1],2))%>%
+    pivot_wider(names_from = Name, values_from = Value)
+  # combine these dataframes and add a site and date column:
+  df.date<-bind_cols(df.rain, df.tmax.lag, df.tmax.delta, df.tmin.lag, df.tmin.delta)%>%
+    mutate(site_no = vect.NWIS$Name[i], Date = date, .before = 1)
+  return(df.date)
+}
 
 

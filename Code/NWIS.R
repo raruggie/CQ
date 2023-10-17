@@ -780,6 +780,67 @@ df.OLS%>%
   st_as_sf(.)%>%
   mapview(., zcol = 'OLS.S')
 
+#### Grouping CQ curves (stationary, mobilization, dilutionary, complex) ####
+
+# create a list of dataframes for each sites CQ observations:
+
+temp<-df.NWIS.TP_CQ%>%
+  rename(Name = site_no)%>%
+  filter(Name %in% df.sf.NWIS.keep$Name)%>%
+  mutate(log_C = log(result_va), log_Q = log(X_00060_00003), C = result_va, Q = X_00060_00003)%>%
+  filter(is.finite(log_C))%>%
+  filter(is.finite(log_Q))
+
+l.temp<-temp%>%
+  split(., .$Name)
+
+# create lm models for each site:
+
+l.lm.CQ_slopes<-lapply(l.temp, \(i) lm(log_C~log_Q, data=i))
+
+# save the model coef ad pvals:
+
+coef<-tibble::rownames_to_column(as.data.frame(t(sapply(l.lm.CQ_slopes, \(i) summary(i)$coefficients[,1] ))), 'site_no')
+
+# save the pvalues 
+
+pvals<-tibble::rownames_to_column(as.data.frame(t(sapply(l.lm.CQ_slopes, \(i) summary(i)$coefficients[,4] ))), 'site_no')%>%
+  rename(I.pval = 2, S.pval = 3)
+
+# merge the two dfs:
+
+m<-left_join(coef,pvals,by='site_no')
+
+# add column for CQ type:
+
+m<-mutate(m, Type = ifelse(S.pval>0.05, 'Stationary', ifelse(log_Q>0, 'Mobilization', 'Dilution')))
+
+# merge labels with plotting df:
+
+temp<-left_join(temp,m%>%select(site_no, Type),by=c('Name'='site_no'))
+
+# create a df for CQplot of all sites with BP analysis:
+
+df_Seg.2<-filter(df_Seg, site %in% temp$Name)%>%
+ left_join(.,m%>%select(site_no, Type),by=c('site'='site_no')) 
+
+# make plot:
+
+ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
+  geom_point(aes(color = Type))+
+  geom_smooth(method = 'lm')+
+  geom_line(aes(x = Q, y = Seg_C), color = 'purple', size = 2)+
+  facet_wrap(dplyr::vars(n_sample_rank), scales = 'free')+
+  theme(
+    strip.background = element_blank(),
+    strip.text.x = element_blank()
+  )
+
+# loking at this plot I want to add a fourth CQ type for complex, if the slopes of the BP analysis
+# look widely different. I could also do a threshold for the abs of the differnce in pre-post BP slope
+
+
+
 
 # finally save image to workspace:
 

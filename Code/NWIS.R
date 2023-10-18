@@ -6,6 +6,8 @@ gc()
 ####################### Load packages #######################
 
 library(climateR)
+library(ggpubr)
+library(ggnewscale)
 library(readxl)
 library(CropScapeR)
 library(FedData)
@@ -405,11 +407,13 @@ l.SS_WS.NWIS<-lapply(seq_along(df.NWIS.TP_site_metadata$site_no), \(i) Delineate
 
 names(l.SS_WS.NWIS)<-df.NWIS.TP_site_metadata$site_no
 
-save(l.SS_WS.NWIS, file = 'C:/PhD/CQ/Downloaded_Data/l.SS_WS.NWIS.Rdata')
+# save(l.SS_WS.NWIS, file = 'C:/PhD/CQ/Downloaded_Data/l.SS_WS.NWIS.Rdata')
 
 df.sf.NWIS<-fun.l.SS_WS.to.sfdf(l.SS_WS.NWIS)
 
-save(df.sf.NWIS, file = 'C:/PhD/CQ/Processed_Data/df.sf.NWIS.Rdata')
+# save(df.sf.NWIS, file = 'C:/PhD/CQ/Processed_Data/df.sf.NWIS.Rdata')
+
+load('C:/PhD/CQ/Processed_Data/df.sf.NWIS.Rdata')
 
 # calculate DA using vect:
 
@@ -445,26 +449,13 @@ df.sf.NWIS.keep<-df.sf.NWIS%>%filter(abs(Delination_Error)<=.02)
 
 # note I suspect that snapping the lat long to nhd would improve the delineation success notgoing to do that now
 
-# of these sites, Iwant to filter down those that havedata during the CDLperiod
-# the CDL goes back to 2008: todothis:
-
-# filter theraw TPdatabased on date and toget the desired sites:
-
-temp<-df.NWIS.TP_CQ%>%filter(year(df.NWIS.TP_CQ$sample_dt) >= 2008)
-
-df.sf.NWIS.keep<-df.sf.NWIS.keep%>%filter(Name %in% unique(temp$site_no))
-
-# remove the Long island sites:
-
-df.sf.NWIS.keep<-df.sf.NWIS.keep%>%filter(!Name %in% c("01304000", "01305000", "01304500"))
-
-# map of this new set of sites:
-
-mapview(df.sf.NWIS.keep)
+#### Data Layers ####
 
 # now run the datalayers workflow for these sites:
 
-#### CDL: note when I ran ths CDL code block I used the 103 sites thatwere apartofthe set, this is prior to filtering based onthe CDLdate... so I am just going to filter the resulting CDL df at the end. Just note that what is saved is of the 103 sites, but that the code doesnt reflect this, i.e. I just ran the filter anddidnt keep the code because df.NWIS.TP.keep would be down to 56 if I did it right 
+#### CDL: 
+
+# note when I ran ths CDL code block I used the 103 sites thatwere apartofthe set, this is prior to filtering based onthe CDLdate... so I am just going to filter the resulting CDL df at the end. Just note that what is saved is of the 103 sites, but that the code doesnt reflect this, i.e. I just ran the filter anddidnt keep the code because df.NWIS.TP.keep would be down to 56 if I did it right 
 
 # download:
 
@@ -490,17 +481,38 @@ l.NWIS.CDL <- terra::extract(rast.NWIS.CDL.2020, vect.NWIS.proj, table,ID=FALSE)
 
 # save(l.NWIS.CDL, file='Processed_Data/l.NWIS.CDL.Rdata')
 
+load('Processed_Data/l.NWIS.CDL.Rdata')
+
+# aggregate CDL: to do this:
+# looking at the CDL legend (linkdata), I determined the following:
+
+Ag<-c(1:6,10:14,21:39,41:61,66:72,74:77,204:214,216:227,229:250,254)
+Pasture<-c(176)
+Forest<-c(63,141:143)
+Shrub<-c(64,152)
+Barren<-c(65,131)
+Developed<-c(82,121:124)
+Water<-c(83,111)
+Wetlands_all<-c(87,190,195)
+Other<-c(88,112)
+
+l <- tibble::lst(Ag,Pasture,Forest,Shrub,Barren,Developed,Water,Wetlands_all,Other)
+
+reclass_CDL<-data.frame(lapply(l, `length<-`, max(lengths(l))))%>%
+  pivot_longer(cols = everything(), values_to = 'MasterCat',names_to = 'Crop')%>%
+  drop_na(MasterCat)
+
 # convert resulting list of tables to list of dfs
 
 l.NWIS.CDL<-lapply(l.NWIS.CDL, as.data.frame)
 
 # left join each df in the list to the CDL legend key, as well as calcuate the pland:
   
-l.NWIS.CDL<-lapply(l.NWIS.CDL, \(i) i%>%mutate(Var1 = as.integer(as.character(Var1)),Freq=round(Freq/sum(Freq),2))%>%dplyr::left_join(., linkdata, by = c('Var1' = 'MasterCat')))
+l.NWIS.CDL<-lapply(l.NWIS.CDL, \(i) i%>%mutate(Var1 = as.integer(as.character(Var1)),Freq=round(Freq/sum(Freq),2))%>%dplyr::left_join(., reclass_CDL, by = c('Var1' = 'MasterCat'))) # I replaced linkdata in the left join with reclass_CDL to get simplified CDL classes
 
 # set names of list:
 
-names(l.NWIS.CDL)<-df.sf.NWIS.keep$Name
+names(l.NWIS.CDL)<-df.sf.NWIS.keep$Name # note doesnt work with the workflow set up to filter on 2008 limiter
 
 # combine list into single df:
 
@@ -512,13 +524,24 @@ df.NWIS.CDL<-filter(df.NWIS.CDL, Crop != '')
 
 # pivot wider:
 
-df.NWIS.CDL<- pivot_wider(df.NWIS.CDL[,-2], names_from = Crop, values_from = Freq)
+# if using the CDL linkdata, use this:
+
+# df.NWIS.CDL<- pivot_wider(df.NWIS.CDL[,-2], names_from = Crop, values_from = Freq)
+
+# if using the reclass_CDL data, use this:
+
+df.NWIS.CDL<-df.NWIS.CDL[,-2]%>%
+  group_by(Name, Crop)%>%
+  summarise(Freq=sum(Freq, na.rm = T))%>%
+  pivot_wider(., names_from = Crop, values_from = Freq)
 
 # check to see if add up to 100%:
 
 sort(rowSums(df.NWIS.CDL[,-1], na.rm = T))
 
-# looks good. Done with CDL
+# looks good. 
+
+# Done with CDL
 
 #### NED
 
@@ -648,6 +671,27 @@ save(df.NWIS.Climate, file = 'Processed_Data/df.NWIS.Climate.Rdata')
 ## combine climate,CDL, DEM, and SS_WS to one df:
 
 df.NWIS.Predictors<-left_join(df.NWIS.CDL,df.NWIS.DEM, by = 'Name')%>%left_join(.,df.NWIS.Climate, by = 'Name')%>%left_join(.,df.sf.NWIS.keep, by = 'Name')
+
+# of these sites, Iwant to filter down those that havedata during the CDLperiod
+# the CDL goes back to 2008: todothis:
+
+# filter theraw TPdatabased on date and toget the desired sites:
+
+temp<-df.NWIS.TP_CQ%>%filter(year(df.NWIS.TP_CQ$sample_dt) >= 2008)
+
+df.sf.NWIS.keep<-df.sf.NWIS.keep%>%filter(Name %in% unique(temp$site_no))
+
+# remove the Long island sites:
+
+df.sf.NWIS.keep<-df.sf.NWIS.keep%>%filter(!Name %in% c("01304000", "01305000", "01304500"))
+
+# map of this new set of sites:
+
+# mapview(df.sf.NWIS.keep)
+
+# filter the predictor set to these sites:
+
+df.NWIS.Predictors<-filter(df.NWIS.Predictors, Name %in% df.sf.NWIS.keep$Name)
 
 ##### Correlations
 
@@ -837,27 +881,111 @@ ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
   )
 
 # looking at this plot I want to add a fourth CQ type for complex, if the slopes of the BP analysis look widely different. 
-# I will start with a threshold for the abs of the differnce in pre-post BP slope and see which sites get signled out:
+# I will start wit hcalcuating the angle between pre-post BP slope and see which sites get signled out:
 
 # add a new column with the angle between the two lines:
-
-df_Seg.3<-distinct(df_Seg.2, site, .keep_all = T )%>%
-  mutate(slope_angle=atan(abs((Slope2-Slope1)/(1+(Slope2*Slope1)))))
 
 df_Seg.2<-df_Seg.2%>%
   mutate(slope_angle=factor(round(atan(abs((Slope2-Slope1)/(1+(Slope2*Slope1)))),1)))
 
+# create color pallete for the slope angle:
+
+hc<-heat.colors(length(unique(df_Seg.2$slope_angle)), rev = T)
+
+# make plot:
+
 ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
   geom_point(aes(color = Type))+
+  scale_color_manual(name = "CQ Type", values = c("red", "blue", "green"))+
   geom_smooth(method = 'lm')+
+  new_scale_color() +
+  geom_line(aes(x = Q, y = Seg_C), size = 2.5, color = 'black')+
   geom_line(aes(x = Q, y = Seg_C, color = slope_angle), size = 2)+
+  scale_color_manual(name = "Slope Angle", values = hc)+
   facet_wrap(dplyr::vars(n_sample_rank), scales = 'free')+
   theme(
     strip.background = element_blank(),
     strip.text.x = element_blank()
   )
 
+# based on this plot, I would chose the following sites as complex:
 
+complex_sites<-unique(df_Seg.2$site)[c(3,18,24,25,26,34,35,42,43)]
+
+df_Seg.2<-mutate(df_Seg.2, Type = ifelse(site %in% complex_sites, 'Complex', Type))
+
+# make plot:
+
+ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
+  geom_point(aes(color = Type))+
+  scale_color_manual(name = "CQ Type", values = c("purple", "red", "blue", "green"))+
+  geom_smooth(method = 'lm')+
+  geom_line(aes(x = Q, y = Seg_C), color = 'yellow', size = 1.5)+
+  facet_wrap(dplyr::vars(n_sample_rank), scales = 'free')+
+  theme(
+    strip.background = element_blank(),
+    strip.text.x = element_blank()
+  )
+
+# add the type to the mapping df:
+
+df.sf.NWIS.keep.2<-left_join(df.sf.NWIS.keep, distinct(df_Seg.2, site, .keep_all = T)%>%select(site, Type, n_sample_rank), by = c('Name'='site'))%>%
+  select(Name, Type, n_sample_rank)%>%
+  arrange(n_sample_rank)%>%
+  mutate(n_sample_rank=1:nrow(.))%>%
+  left_join(.,df.NWIS.TP%>%group_by(site_no)%>%summarise(n=n()), by = c('Name'='site_no'))%>%
+  mutate(NEW = case_when(n < 50 ~ .05,
+                         n >=50 & n < 100 ~ .25,
+                         n >=100 & n < 500 ~ .5,
+                         n >=500 ~ .9))
+# map:
+
+# mapview(df.sf.NWIS.keep.2, zcol = 'Type', alpha.regions = 'NEW')
+
+#### Categorizing land use ####
+
+# USGS criteria:
+# Agricultural sites have >50% agricultural land and ≤5% urban land;
+# urban sites have >25% urban and ≤25% agricultural land; 
+# undeveloped sites have ≤ 5% urban and ≤ 25% agricultural land; 
+# all other combinations of urban, agricultural, and undeveloped lands are classified as mixed
+
+# merge land use from df.NWIS.CDL to df.sf.NWIS.keep.2:
+
+df.sf.NWIS.keep.2<-left_join(df.sf.NWIS.keep.2, df.NWIS.CDL, by = 'Name')
+
+# create the land use class column based on USGS critiera:
+
+df.sf.NWIS.keep.2<-df.sf.NWIS.keep.2%>%
+  mutate(USGS.LU = 'Mixed')%>%
+  mutate(USGS.LU = case_when(.default = 'Mixed',
+    Ag > .50 & Developed <= .05 ~ 'Agriculture',
+    Developed > .25 & Ag <= .25 ~ 'Urban',
+    Developed <= .05 & Ag <= .25 ~ 'Undeveloped')
+  )
+
+# merge the OLS slopes with this df:
+
+df.sf.NWIS.keep.2<-left_join(df.sf.NWIS.keep.2, df.OLS_Sens[,1:5], by = 'Name')
+
+# pivot longer for geom_box + facet:
+
+data<-df.sf.NWIS.keep.2%>%
+  pivot_longer(cols = 15:18, names_to = 'CQ_parameter', values_to = 'Value')%>%
+  mutate(USGS.LU=factor(USGS.LU))
+
+# make ggplot:
+
+my_xlab <- paste(levels(factor(df.sf.NWIS.keep.2$USGS.LU)),"\n(N=",table(factor(df.sf.NWIS.keep.2$USGS.LU)),")",sep="")
+
+ggplot(data, aes(x=USGS.LU, y=Value))+
+  geom_boxplot(varwidth = TRUE, alpha=0.2)+
+  scale_x_discrete(labels=my_xlab)+
+  facet_wrap('CQ_parameter', scales = 'free')+
+  stat_compare_means(method = "anova", label.y = 2)+      # Add global p-value
+  stat_compare_means(label = "p.signif", method = "t.test",
+                     ref.group = "0.5")  
+  
 
 # finally save image to workspace:
 

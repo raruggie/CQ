@@ -836,9 +836,26 @@ ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
     strip.text.x = element_blank()
   )
 
-# loking at this plot I want to add a fourth CQ type for complex, if the slopes of the BP analysis
-# look widely different. I could also do a threshold for the abs of the differnce in pre-post BP slope
+# looking at this plot I want to add a fourth CQ type for complex, if the slopes of the BP analysis look widely different. 
+# I will start with a threshold for the abs of the differnce in pre-post BP slope and see which sites get signled out:
 
+# add a new column with the angle between the two lines:
+
+df_Seg.3<-distinct(df_Seg.2, site, .keep_all = T )%>%
+  mutate(slope_angle=atan(abs((Slope2-Slope1)/(1+(Slope2*Slope1)))))
+
+df_Seg.2<-df_Seg.2%>%
+  mutate(slope_angle=factor(round(atan(abs((Slope2-Slope1)/(1+(Slope2*Slope1)))),1)))
+
+ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
+  geom_point(aes(color = Type))+
+  geom_smooth(method = 'lm')+
+  geom_line(aes(x = Q, y = Seg_C, color = slope_angle), size = 2)+
+  facet_wrap(dplyr::vars(n_sample_rank), scales = 'free')+
+  theme(
+    strip.background = element_blank(),
+    strip.text.x = element_blank()
+  )
 
 
 

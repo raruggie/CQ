@@ -543,6 +543,159 @@ sort(rowSums(df.NWIS.CDL[,-1], na.rm = T))
 
 # Done with CDL
 
+
+
+
+
+
+
+
+
+
+
+#### NLCD: 
+
+# the CDLand NLCD differ in that the CDL combined Pasture and grassland while the nLCD does not
+# thus, even though the CDL can be agrgated to et close to the NLCD, I want to also have the nLCD
+# to the difference.
+
+# note: the 103 sites prior to filtering based onthe CDLdate are used in this workflow
+
+# I am going to run this workflow for NLCD 2019 and NLCD 2001 to see if any sites had major changes in land use:
+
+# download: to do this:
+# NLCD is not working when trying to download based on the entire polygon df, so going to use lapply to download individually instead of extract:
+
+l.rast.NWIS.NLCD.2019 <- lapply(seq_along(df.sf.NWIS.keep$Name), \(i) get_nlcd(template = st_cast(df.sf.NWIS.keep, "MULTIPOLYGON")[i,], label = as.character(i), year = 2019))
+
+l.rast.NWIS.NLCD.2001 <- lapply(seq_along(df.sf.NWIS.keep$Name), \(i) get_nlcd(template = st_cast(df.sf.NWIS.keep, "MULTIPOLYGON")[i,], label = as.character(i), year = 2001))
+
+# convert to SpatRasters:
+
+l.rast.NWIS.NLCD.2019<-lapply(l.rast.NWIS.NLCD.2019, rast)
+
+l.rast.NWIS.NLCD.2001<-lapply(l.rast.NWIS.NLCD.2001, rast)
+
+# plot
+
+# plot(rast.NWIS.NLCD.2019)
+
+# see if 2001 and 2019 crs are the same:
+
+crs(l.rast.NWIS.NLCD.2019[[2]])
+crs(l.rast.NWIS.NLCD.2001[[2]])
+
+# reproject to sample watershed vector data to match raster data:
+
+vect.NWIS<-vect(df.sf.NWIS.keep) # need to first ininalize vect since sometimes reading in rdata file (terra issue)
+
+vect.NWIS.proj<-terra::project(vect.NWIS, crs(l.rast.NWIS.NLCD.2019[[1]]))
+
+# extract frequency tables for each sample watershed
+
+system.time({l.NWIS.NLCD.2019 <- lapply(seq_along(l.rast.NWIS.NLCD.2019), \(i) terra::extract(l.rast.NWIS.NLCD.2019[[i]], vect.NWIS.proj[i], ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2)))})
+
+system.time({l.NWIS.NLCD.2019 <- lapply(seq_along(l.rast.NWIS.NLCD.2019), \(i) terra::extract(l.rast.NWIS.NLCD.2019[[i]], vect.NWIS.proj[i], ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2)))})
+
+l.NWIS.NLCD.2001 <- lapply(l.rast.NWIS.NLCD.2001, \(i) terra::extract(i, vect.NWIS.proj[i], table,ID=FALSE)[[1]])
+
+x<-terra::extract(l.rast.NWIS.NLCD.2019[[20]], vect.NWIS.proj[20], ID=FALSE)%>%group_by_at(1)%>%summarize(n=round(n()/nrow(.),2))
+
+
+
+
+# save(l.NWIS.CDL, file='Processed_Data/l.NWIS.CDL.Rdata')
+
+load('Processed_Data/l.NWIS.CDL.Rdata')
+
+# aggregate CDL: to do this:
+# looking at the CDL legend (linkdata), I determined the following:
+
+Ag<-c(1:6,10:14,21:39,41:61,66:72,74:77,204:214,216:227,229:250,254)
+Pasture<-c(176)
+Forest<-c(63,141:143)
+Shrub<-c(64,152)
+Barren<-c(65,131)
+Developed<-c(82,121:124)
+Water<-c(83,111)
+Wetlands_all<-c(87,190,195)
+Other<-c(88,112)
+
+l <- tibble::lst(Ag,Pasture,Forest,Shrub,Barren,Developed,Water,Wetlands_all,Other)
+
+reclass_CDL<-data.frame(lapply(l, `length<-`, max(lengths(l))))%>%
+  pivot_longer(cols = everything(), values_to = 'MasterCat',names_to = 'Crop')%>%
+  drop_na(MasterCat)
+
+# convert resulting list of tables to list of dfs
+
+l.NWIS.CDL<-lapply(l.NWIS.CDL, as.data.frame)
+
+# left join each df in the list to the CDL legend key, as well as calcuate the pland:
+
+l.NWIS.CDL<-lapply(l.NWIS.CDL, \(i) i%>%mutate(Var1 = as.integer(as.character(Var1)),Freq=round(Freq/sum(Freq),2))%>%dplyr::left_join(., reclass_CDL, by = c('Var1' = 'MasterCat'))) # I replaced linkdata in the left join with reclass_CDL to get simplified CDL classes
+
+# set names of list:
+
+names(l.NWIS.CDL)<-df.sf.NWIS.keep$Name # note doesnt work with the workflow set up to filter on 2008 limiter
+
+# combine list into single df:
+
+df.NWIS.CDL<-bind_rows(l.NWIS.CDL, .id = 'Name')
+
+# remove potential for one of the MasterCats in the CDL to be empty, which is messing with the pivot_wider below:
+
+df.NWIS.CDL<-filter(df.NWIS.CDL, Crop != '')
+
+# pivot wider:
+
+# if using the CDL linkdata, use this:
+
+# df.NWIS.CDL<- pivot_wider(df.NWIS.CDL[,-2], names_from = Crop, values_from = Freq)
+
+# if using the reclass_CDL data, use this:
+
+df.NWIS.CDL<-df.NWIS.CDL[,-2]%>%
+  group_by(Name, Crop)%>%
+  summarise(Freq=sum(Freq, na.rm = T))%>%
+  pivot_wider(., names_from = Crop, values_from = Freq)
+
+# check to see if add up to 100%:
+
+sort(rowSums(df.NWIS.CDL[,-1], na.rm = T))
+
+# looks good. 
+
+# Done with CDL
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #### NED
 
 # download:
@@ -929,7 +1082,7 @@ ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
 
 # add the type to the mapping df:
 
-df.sf.NWIS.keep.2<-left_join(df.sf.NWIS.keep, distinct(df_Seg.2, site, .keep_all = T)%>%select(site, Type, n_sample_rank), by = c('Name'='site'))%>%
+df.sf.NWIS.keep.2<-left_join(df.sf.NWIS.keep, distinct(df_Seg.2, site, .keep_all = T)%>%select(.,c(site, Type, n_sample_rank)), by = c('Name'='site'))%>%
   select(Name, Type, n_sample_rank)%>%
   arrange(n_sample_rank)%>%
   mutate(n_sample_rank=1:nrow(.))%>%
@@ -950,18 +1103,29 @@ df.sf.NWIS.keep.2<-left_join(df.sf.NWIS.keep, distinct(df_Seg.2, site, .keep_all
 # undeveloped sites have ≤ 5% urban and ≤ 25% agricultural land; 
 # all other combinations of urban, agricultural, and undeveloped lands are classified as mixed
 
+# IN a first pass using these thresholds the number of ag and urban sites wasvery low
+# I will play with these numbers to see what happens
+
 # merge land use from df.NWIS.CDL to df.sf.NWIS.keep.2:
 
 df.sf.NWIS.keep.2<-left_join(df.sf.NWIS.keep.2, df.NWIS.CDL, by = 'Name')
+
+# combine Ag and Pasture into a single landuse for Ag:
+
+df.sf.NWIS.keep.2<-mutate(df.sf.NWIS.keep.2, Ag = Ag+Pasture)
+
+# set NA to zero
+
+df.sf.NWIS.keep.2[is.na(df.sf.NWIS.keep.2)]<-0
 
 # create the land use class column based on USGS critiera:
 
 df.sf.NWIS.keep.2<-df.sf.NWIS.keep.2%>%
   mutate(USGS.LU = 'Mixed')%>%
   mutate(USGS.LU = case_when(.default = 'Mixed',
-    Ag > .50 & Developed <= .05 ~ 'Agriculture',
-    Developed > .25 & Ag <= .25 ~ 'Urban',
-    Developed <= .05 & Ag <= .25 ~ 'Undeveloped')
+    Ag > .30 & Developed <= .1 ~ 'Agriculture',
+    Developed > .1 & Ag <= .3 ~ 'Urban',
+    Developed <= .1 & Ag <= .1 ~ 'Undeveloped')
   )
 
 # merge the OLS slopes with this df:
@@ -985,6 +1149,7 @@ ggplot(data, aes(x=USGS.LU, y=Value))+
   stat_compare_means(method = "anova", label.y = 2)+      # Add global p-value
   stat_compare_means(label = "p.signif", method = "t.test",
                      ref.group = "0.5")  
+
   
 
 # finally save image to workspace:

@@ -460,28 +460,48 @@ df.sf.NWIS.keep<-df.sf.NWIS%>%filter(abs(Delination_Error)<=.02)
 # download:
 
 rast.NWIS.CDL.2020 <- GetCDLData(aoi = df.sf.NWIS.keep, year = "2020", type = "b", tol_time = 1000)
+rast.NWIS.CDL.2008 <- GetCDLData(aoi = df.sf.NWIS.keep, year = "2008", type = "b", tol_time = 1000)
 
 # convert to rast:
 
 rast.NWIS.CDL.2020<-rast(rast.NWIS.CDL.2020)
+rast.NWIS.CDL.2008<-rast(rast.NWIS.CDL.2008)
+
+# check CRS of both years:
+
+crs(rast.NWIS.CDL.2020)
+crs(rast.NWIS.CDL.2008)
 
 # plot
 
-plot(rast.NWIS.CDL.2020)
+# plot(rast.NWIS.CDL.2020)
+plot(rast.NWIS.CDL.2008)
 
 # reproject to sample watershed vector data to match raster data:
 
 vect.NWIS<-vect(df.sf.NWIS.keep) # need to first ininalize vect since sometimes reading in rdata file (terra issue)
 
-vect.NWIS.proj<-terra::project(vect.NWIS, crs(rast.NWIS.CDL.2020))
+vect.NWIS.proj<-terra::project(vect.NWIS, crs(rast.NWIS.CDL.2008))
 
 # extract frequency tables for each sample watershed
 
 l.NWIS.CDL <- terra::extract(rast.NWIS.CDL.2020, vect.NWIS.proj, table,ID=FALSE)[[1]]
+l.NWIS.CDL.2008 <- terra::extract(rast.NWIS.CDL.2008, vect.NWIS.proj, table,ID=FALSE)[[1]]
+
+# save:
 
 # save(l.NWIS.CDL, file='Processed_Data/l.NWIS.CDL.Rdata')
+# save(l.NWIS.CDL.2008, file='Processed_Data/l.NWIS.CDL.2008.Rdata')
 
 load('Processed_Data/l.NWIS.CDL.Rdata')
+load('Processed_Data/l.NWIS.CDL.2008.Rdata')
+
+# convert resulting list of tables to list of dfs
+
+l.NWIS.CDL<-lapply(l.NWIS.CDL, as.data.frame)
+l.NWIS.CDL.2008<-lapply(l.NWIS.CDL.2008, as.data.frame)
+
+# the next step is to join the CDL key with these dfs, but first:
 
 # aggregate CDL: to do this:
 # looking at the CDL legend (linkdata), I determined the following:
@@ -489,44 +509,43 @@ load('Processed_Data/l.NWIS.CDL.Rdata')
 Ag<-c(1:6,10:14,21:39,41:61,66:72,74:77,204:214,216:227,229:250,254)
 Pasture<-c(176)
 Forest<-c(63,141:143)
-Shrub<-c(64,152)
-Barren<-c(65,131)
 Developed<-c(82,121:124)
 Water<-c(83,111)
 Wetlands_all<-c(87,190,195)
-Other<-c(88,112)
+Other<-c(64,65,88,112,131,152) # Shrub<-c(64,152) Barren<-c()
 
-l <- tibble::lst(Ag,Pasture,Forest,Shrub,Barren,Developed,Water,Wetlands_all,Other)
+l <- tibble::lst(Ag,Pasture,Forest,Developed,Water,Wetlands_all,Other)
 
 reclass_CDL<-data.frame(lapply(l, `length<-`, max(lengths(l))))%>%
   pivot_longer(cols = everything(), values_to = 'MasterCat',names_to = 'Crop')%>%
   drop_na(MasterCat)
 
-# convert resulting list of tables to list of dfs
-
-l.NWIS.CDL<-lapply(l.NWIS.CDL, as.data.frame)
-
 # left join each df in the list to the CDL legend key, as well as calcuate the pland:
   
 l.NWIS.CDL<-lapply(l.NWIS.CDL, \(i) i%>%mutate(Var1 = as.integer(as.character(Var1)),Freq=round(Freq/sum(Freq),2))%>%dplyr::left_join(., reclass_CDL, by = c('Var1' = 'MasterCat'))) # I replaced linkdata in the left join with reclass_CDL to get simplified CDL classes
+l.NWIS.CDL.2008<-lapply(l.NWIS.CDL.2008, \(i) i%>%mutate(Var1 = as.integer(as.character(Var1)),Freq=round(Freq/sum(Freq),2))%>%dplyr::left_join(., reclass_CDL, by = c('Var1' = 'MasterCat'))) # I replaced linkdata in the left join with reclass_CDL to get simplified CDL classes
 
 # set names of list:
 
 names(l.NWIS.CDL)<-df.sf.NWIS.keep$Name # note doesnt work with the workflow set up to filter on 2008 limiter
+names(l.NWIS.CDL.2008)<-df.sf.NWIS.keep$Name # note doesnt work with the workflow set up to filter on 2008 limiter
 
 # combine list into single df:
 
 df.NWIS.CDL<-bind_rows(l.NWIS.CDL, .id = 'Name')
+df.NWIS.CDL.2008<-bind_rows(l.NWIS.CDL.2008, .id = 'Name')
 
 # remove potential for one of the MasterCats in the CDL to be empty, which is messing with the pivot_wider below:
 
 df.NWIS.CDL<-filter(df.NWIS.CDL, Crop != '')
+df.NWIS.CDL.2008<-filter(df.NWIS.CDL.2008, Crop != '')
 
 # pivot wider:
 
 # if using the CDL linkdata, use this:
 
 # df.NWIS.CDL<- pivot_wider(df.NWIS.CDL[,-2], names_from = Crop, values_from = Freq)
+# df.NWIS.CDL.2008<- pivot_wider(df.NWIS.CDL.2008[,-2], names_from = Crop, values_from = Freq)
 
 # if using the reclass_CDL data, use this:
 
@@ -535,45 +554,44 @@ df.NWIS.CDL<-df.NWIS.CDL[,-2]%>%
   summarise(Freq=sum(Freq, na.rm = T))%>%
   pivot_wider(., names_from = Crop, values_from = Freq)
 
+df.NWIS.CDL.2008<-df.NWIS.CDL.2008[,-2]%>%
+  group_by(Name, Crop)%>%
+  summarise(Freq=sum(Freq, na.rm = T))%>%
+  pivot_wider(., names_from = Crop, values_from = Freq)
+
 # check to see if add up to 100%:
 
 sort(rowSums(df.NWIS.CDL[,-1], na.rm = T))
+sort(rowSums(df.NWIS.CDL.2008[,-1], na.rm = T))
 
 # looks good. 
 
 # Done with CDL
 
+# actually I want to come up with a workflow to get all years of CDL for the watersheds,
+# butthat isgoing totake a long timeto run...
 
-
-
-
-
-
-
-
-
+# but first I'm going to look at the differences in the CDL between 2008 and 2020
 
 #### NLCD: 
 
-# the CDLand NLCD differ in that the CDL combined Pasture and grassland while the nLCD does not
+# the CDL and NLCD differ in that the CDL combined Pasture and grassland while the nLCD does not
 # thus, even though the CDL can be agrgated to et close to the NLCD, I want to also have the nLCD
 # to the difference.
 
-# note: the 103 sites prior to filtering based onthe CDLdate are used in this workflow
+# note: the 53 sites post filtering based onthe CDLdate are used in this workflow
 
 # I am going to run this workflow for NLCD 2019 and NLCD 2001 to see if any sites had major changes in land use:
 
 # download: to do this:
-# NLCD is not working when trying to download based on the entire polygon df, so going to use lapply to download individually instead of extract:
+# NLCD is not working when trying to download based on the entire polygon df, so going to use lapply to download individually:
 
 l.rast.NWIS.NLCD.2019 <- lapply(seq_along(df.sf.NWIS.keep$Name), \(i) get_nlcd(template = st_cast(df.sf.NWIS.keep, "MULTIPOLYGON")[i,], label = as.character(i), year = 2019))
-
 l.rast.NWIS.NLCD.2001 <- lapply(seq_along(df.sf.NWIS.keep$Name), \(i) get_nlcd(template = st_cast(df.sf.NWIS.keep, "MULTIPOLYGON")[i,], label = as.character(i), year = 2001))
 
 # convert to SpatRasters:
 
 l.rast.NWIS.NLCD.2019<-lapply(l.rast.NWIS.NLCD.2019, rast)
-
 l.rast.NWIS.NLCD.2001<-lapply(l.rast.NWIS.NLCD.2001, rast)
 
 # plot
@@ -594,79 +612,28 @@ vect.NWIS.proj<-terra::project(vect.NWIS, crs(l.rast.NWIS.NLCD.2019[[1]]))
 # extract frequency tables for each sample watershed
 
 system.time({l.NWIS.NLCD.2019 <- lapply(seq_along(l.rast.NWIS.NLCD.2019), \(i) terra::extract(l.rast.NWIS.NLCD.2019[[i]], vect.NWIS.proj[i], ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2)))})
+system.time({l.NWIS.NLCD.2001 <- lapply(seq_along(l.rast.NWIS.NLCD.2001), \(i) terra::extract(l.rast.NWIS.NLCD.2001[[i]], vect.NWIS.proj[i], ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2)))})
 
-system.time({l.NWIS.NLCD.2019 <- lapply(seq_along(l.rast.NWIS.NLCD.2019), \(i) terra::extract(l.rast.NWIS.NLCD.2019[[i]], vect.NWIS.proj[i], ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2)))})
+# pivot df in lists longer and add a Name column for the site:
 
-l.NWIS.NLCD.2001 <- lapply(l.rast.NWIS.NLCD.2001, \(i) terra::extract(i, vect.NWIS.proj[i], table,ID=FALSE)[[1]])
+l.NWIS.NLCD.2019<-lapply(seq_along(l.NWIS.NLCD.2019), \(i) pivot_wider(l.NWIS.NLCD.2019[[i]], names_from = Class, values_from = Freq)%>%mutate(Name = df.sf.NWIS.keep$Name[i], .before = 1))
+l.NWIS.NLCD.2001<-lapply(seq_along(l.NWIS.NLCD.2001), \(i) pivot_wider(l.NWIS.NLCD.2001[[i]], names_from = Class, values_from = Freq)%>%mutate(Name = df.sf.NWIS.keep$Name[i], .before = 1))
 
-x<-terra::extract(l.rast.NWIS.NLCD.2019[[20]], vect.NWIS.proj[20], ID=FALSE)%>%group_by_at(1)%>%summarize(n=round(n()/nrow(.),2))
+# bind the lists into a single dataframe
+# note some of the sites have different length dtaframes because they didnt have all the same number of NLCD classes. When binding rows this will give a dataframe of the maximum length and put NAs for sites where there wasn't a column: 
 
+df.NWIS.NLCD.2019<-bind_rows(l.NWIS.NLCD.2019)
+df.NWIS.NLCD.2001<-bind_rows(l.NWIS.NLCD.2001)
 
+# create a list of these two dataframes:
 
+l.NWIS.NLCD<-list(df.NWIS.NLCD.2019,df.NWIS.NLCD.2001)%>%purrr::set_names(c('2019','2001'))
 
-# save(l.NWIS.CDL, file='Processed_Data/l.NWIS.CDL.Rdata')
+# save thisprocessed list:
 
-load('Processed_Data/l.NWIS.CDL.Rdata')
+# save(l.NWIS.NLCD, file='Processed_Data/l.NWIS.NLCD.Rdata')
 
-# aggregate CDL: to do this:
-# looking at the CDL legend (linkdata), I determined the following:
-
-Ag<-c(1:6,10:14,21:39,41:61,66:72,74:77,204:214,216:227,229:250,254)
-Pasture<-c(176)
-Forest<-c(63,141:143)
-Shrub<-c(64,152)
-Barren<-c(65,131)
-Developed<-c(82,121:124)
-Water<-c(83,111)
-Wetlands_all<-c(87,190,195)
-Other<-c(88,112)
-
-l <- tibble::lst(Ag,Pasture,Forest,Shrub,Barren,Developed,Water,Wetlands_all,Other)
-
-reclass_CDL<-data.frame(lapply(l, `length<-`, max(lengths(l))))%>%
-  pivot_longer(cols = everything(), values_to = 'MasterCat',names_to = 'Crop')%>%
-  drop_na(MasterCat)
-
-# convert resulting list of tables to list of dfs
-
-l.NWIS.CDL<-lapply(l.NWIS.CDL, as.data.frame)
-
-# left join each df in the list to the CDL legend key, as well as calcuate the pland:
-
-l.NWIS.CDL<-lapply(l.NWIS.CDL, \(i) i%>%mutate(Var1 = as.integer(as.character(Var1)),Freq=round(Freq/sum(Freq),2))%>%dplyr::left_join(., reclass_CDL, by = c('Var1' = 'MasterCat'))) # I replaced linkdata in the left join with reclass_CDL to get simplified CDL classes
-
-# set names of list:
-
-names(l.NWIS.CDL)<-df.sf.NWIS.keep$Name # note doesnt work with the workflow set up to filter on 2008 limiter
-
-# combine list into single df:
-
-df.NWIS.CDL<-bind_rows(l.NWIS.CDL, .id = 'Name')
-
-# remove potential for one of the MasterCats in the CDL to be empty, which is messing with the pivot_wider below:
-
-df.NWIS.CDL<-filter(df.NWIS.CDL, Crop != '')
-
-# pivot wider:
-
-# if using the CDL linkdata, use this:
-
-# df.NWIS.CDL<- pivot_wider(df.NWIS.CDL[,-2], names_from = Crop, values_from = Freq)
-
-# if using the reclass_CDL data, use this:
-
-df.NWIS.CDL<-df.NWIS.CDL[,-2]%>%
-  group_by(Name, Crop)%>%
-  summarise(Freq=sum(Freq, na.rm = T))%>%
-  pivot_wider(., names_from = Crop, values_from = Freq)
-
-# check to see if add up to 100%:
-
-sort(rowSums(df.NWIS.CDL[,-1], na.rm = T))
-
-# looks good. 
-
-# Done with CDL
+load('Processed_Data/l.NWIS.NLCD.Rdata')
 
 
 
@@ -1103,12 +1070,28 @@ df.sf.NWIS.keep.2<-left_join(df.sf.NWIS.keep, distinct(df_Seg.2, site, .keep_all
 # undeveloped sites have ≤ 5% urban and ≤ 25% agricultural land; 
 # all other combinations of urban, agricultural, and undeveloped lands are classified as mixed
 
-# IN a first pass using these thresholds the number of ag and urban sites wasvery low
+# I have four different datasets to pull land use from:
+# NLCD 2001 and 2019
+# CDL 2008 and 2020
+
+# The plan is to make two facet plots, one for orginal USGS thresholds and one for adjusted USGS thresholds:
+# facets will be the different CQ parameters with x axis being the different land use catgeory andyaxis beung the parameter value
+# for each land use, color will be used to determine which dataset the values came from
+
+
+# In a first pass using these thresholds the number of ag and urban sites wasvery low
 # I will play with these numbers to see what happens
 
-# merge land use from df.NWIS.CDL to df.sf.NWIS.keep.2:
+# merge land use from CDL and NLCD to df.sf.NWIS.keep.2 and add a yearcolumn:
 
-df.sf.NWIS.keep.2<-left_join(df.sf.NWIS.keep.2, df.NWIS.CDL, by = 'Name')
+t1<-left_join(df.sf.NWIS.keep.2, df.NWIS.CDL%>%mutate(Year = '2020'), by = 'Name')
+t2<-left_join(df.sf.NWIS.keep.2, df.NWIS.CDL.2008%>%mutate(Year = '2008'), by = 'Name')
+
+# merge the 2008 and 2020 CDL dfs and add a column to ID it is CDL:
+
+df.CDL.LU<-bind_rows(t1,t2)
+
+# add a column for 
 
 # combine Ag and Pasture into a single landuse for Ag:
 
@@ -1120,27 +1103,27 @@ df.sf.NWIS.keep.2[is.na(df.sf.NWIS.keep.2)]<-0
 
 # create the land use class column based on USGS critiera:
 
-df.sf.NWIS.keep.2<-df.sf.NWIS.keep.2%>%
+df.NWIS.USGS.LU<-df.sf.NWIS.keep.2%>%
   mutate(USGS.LU = 'Mixed')%>%
   mutate(USGS.LU = case_when(.default = 'Mixed',
-    Ag > .30 & Developed <= .1 ~ 'Agriculture',
-    Developed > .1 & Ag <= .3 ~ 'Urban',
-    Developed <= .1 & Ag <= .1 ~ 'Undeveloped')
+    Ag > .50 & Developed <= .05 ~ 'Agriculture',
+    Developed > .25 & Ag <= .25 ~ 'Urban',
+    Developed <= .05 & Ag <= .25 ~ 'Undeveloped')
   )
 
-# merge the OLS slopes with this df:
+# merge the OLS and Sens slopes and intercepts with this df:
 
-df.sf.NWIS.keep.2<-left_join(df.sf.NWIS.keep.2, df.OLS_Sens[,1:5], by = 'Name')
+df.NWIS.USGS.LU<-left_join(df.NWIS.USGS.LU, df.OLS_Sens[,1:5], by = 'Name')
 
 # pivot longer for geom_box + facet:
 
-data<-df.sf.NWIS.keep.2%>%
+data<-df.NWIS.USGS.LU%>%
   pivot_longer(cols = 15:18, names_to = 'CQ_parameter', values_to = 'Value')%>%
   mutate(USGS.LU=factor(USGS.LU))
 
 # make ggplot:
 
-my_xlab <- paste(levels(factor(df.sf.NWIS.keep.2$USGS.LU)),"\n(N=",table(factor(df.sf.NWIS.keep.2$USGS.LU)),")",sep="")
+my_xlab <- paste(levels(factor(df.NWIS.USGS.LU$USGS.LU)),"\n(N=",table(factor(df.NWIS.USGS.LU$USGS.LU)),")",sep="")
 
 ggplot(data, aes(x=USGS.LU, y=Value))+
   geom_boxplot(varwidth = TRUE, alpha=0.2)+
@@ -1148,7 +1131,8 @@ ggplot(data, aes(x=USGS.LU, y=Value))+
   facet_wrap('CQ_parameter', scales = 'free')+
   stat_compare_means(method = "anova", label.y = 2)+      # Add global p-value
   stat_compare_means(label = "p.signif", method = "t.test",
-                     ref.group = "0.5")  
+                     ref.group = "0.5") +
+  ggtitle('Orginal USGS Thresholds using Aggregated 2020 CDL')
 
   
 

@@ -102,7 +102,7 @@ x<-df.NWIS.TP_CQ%>%
 
 # map of these 43:
 
-filter(df.sf.NWIS.keep, Name %in% x$site_no)[i,]%>%mapview(.)
+filter(df.sf.NWIS.keep, Name %in% x$site_no)%>%mapview(.)
 
 filter(df.sf.NWIS.keep, Name %in% x$site_no)%>%st_is_valid()
 
@@ -392,11 +392,15 @@ for (i in 1:dim(vect.NWIS)[1]){
   }
 }
 
-save(df.ML_NWIS.Climate_features, file = 'Processed_Data/df.ML_NWIS.Climate_features.Rdata')
-
 # didnt finish, I stopped it: i @37, j@989
 
-# takelook around thisdataframe, see which watersheds/dates are not represented:
+# save what I have so far:
+
+# save(df.ML_NWIS.Climate_features, file = 'Processed_Data/df.ML_NWIS.Climate_features.Rdata')
+
+load('Processed_Data/df.ML_NWIS.Climate_features.Rdata')
+
+# take look around this dataframe, see which watersheds/dates are not represented:
 
 
 

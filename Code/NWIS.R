@@ -589,6 +589,9 @@ sort(rowSums(df.NWIS.CDL.2008[,-1], na.rm = T))
 l.rast.NWIS.NLCD.2019 <- lapply(seq_along(df.sf.NWIS.keep$Name), \(i) get_nlcd(template = st_cast(df.sf.NWIS.keep, "MULTIPOLYGON")[i,], label = as.character(i), year = 2019))
 l.rast.NWIS.NLCD.2001 <- lapply(seq_along(df.sf.NWIS.keep$Name), \(i) get_nlcd(template = st_cast(df.sf.NWIS.keep, "MULTIPOLYGON")[i,], label = as.character(i), year = 2001))
 
+# save(l.rast.NWIS.NLCD.2019, file='Downloaded_Data/l.rast.NWIS.NLCD.2019.Rdata')
+# save(l.rast.NWIS.NLCD.2001, file='Downloaded_Data/l.rast.NWIS.NLCD.2001.Rdata')
+
 # convert to SpatRasters:
 
 l.rast.NWIS.NLCD.2019<-lapply(l.rast.NWIS.NLCD.2019, rast)
@@ -614,10 +617,31 @@ vect.NWIS.proj<-terra::project(vect.NWIS, crs(l.rast.NWIS.NLCD.2019[[1]]))
 system.time({l.NWIS.NLCD.2019 <- lapply(seq_along(l.rast.NWIS.NLCD.2019), \(i) terra::extract(l.rast.NWIS.NLCD.2019[[i]], vect.NWIS.proj[i], ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2)))})
 system.time({l.NWIS.NLCD.2001 <- lapply(seq_along(l.rast.NWIS.NLCD.2001), \(i) terra::extract(l.rast.NWIS.NLCD.2001[[i]], vect.NWIS.proj[i], ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2)))})
 
-# pivot df in lists longer and add a Name column for the site:
+# save(l.NWIS.NLCD.2019, file = 'Processed_Data/l.NWIS.NLCD.2019.Rdata')
+# save(l.NWIS.NLCD.2001, file = 'Processed_Data/l.NWIS.NLCD.2001.Rdata')
 
-l.NWIS.NLCD.2019<-lapply(seq_along(l.NWIS.NLCD.2019), \(i) pivot_wider(l.NWIS.NLCD.2019[[i]], names_from = Class, values_from = Freq)%>%mutate(Name = df.sf.NWIS.keep$Name[i], .before = 1))
-l.NWIS.NLCD.2001<-lapply(seq_along(l.NWIS.NLCD.2001), \(i) pivot_wider(l.NWIS.NLCD.2001[[i]], names_from = Class, values_from = Freq)%>%mutate(Name = df.sf.NWIS.keep$Name[i], .before = 1))
+load("Processed_Data/l.NWIS.NLCD.2019.Rdata")
+load("Processed_Data/l.NWIS.NLCD.2001.Rdata")
+
+# reclassify: to do this:
+
+# adjust the NLCD reclassify legend to match the CDL reclassify df made above:
+
+legend.NWIS<-legend; legend.NWIS$Class3[c(13,17)]<-'Pasture';legend.NWIS$Class3[14]<-'Other';legend.NWIS$Class3[1]<-'Water';legend.NWIS$Class3[c(19,20)]<-'Wetlands_all'
+
+sort(unique(legend.NWIS$Class3))==sort(unique(reclass_CDL$Crop))
+
+# looks good
+
+# reclassify the NLCD using this new legend and clean up the dataframe from the next step
+
+l.NWIS.NLCD.2019<-lapply(l.NWIS.NLCD.2019, \(i) left_join(as.data.frame(i), legend.NWIS%>%select(Class, Class3), by = 'Class')%>%mutate(Class = Class3)%>%select(-Class3))
+l.NWIS.NLCD.2001<-lapply(l.NWIS.NLCD.2001, \(i) left_join(as.data.frame(i), legend.NWIS%>%select(Class, Class3), by = 'Class')%>%mutate(Class = Class3)%>%select(-Class3))
+
+# pivot_wider the df in the lists and add a Name column for the site:
+
+l.NWIS.NLCD.2019<-lapply(seq_along(l.NWIS.NLCD.2019), \(i) l.NWIS.NLCD.2019[[i]]%>%group_by(Class)%>%summarise(Freq = sum(Freq))%>%pivot_wider(names_from = Class, values_from = Freq)%>%mutate(Name = df.sf.NWIS.keep$Name[i], .before = 1)%>%as.data.frame(.))
+l.NWIS.NLCD.2001<-lapply(seq_along(l.NWIS.NLCD.2001), \(i) l.NWIS.NLCD.2001[[i]]%>%group_by(Class)%>%summarise(Freq = sum(Freq))%>%pivot_wider(names_from = Class, values_from = Freq)%>%mutate(Name = df.sf.NWIS.keep$Name[i], .before = 1)%>%as.data.frame(.))
 
 # bind the lists into a single dataframe
 # note some of the sites have different length dtaframes because they didnt have all the same number of NLCD classes. When binding rows this will give a dataframe of the maximum length and put NAs for sites where there wasn't a column: 
@@ -634,8 +658,6 @@ l.NWIS.NLCD<-list(df.NWIS.NLCD.2019,df.NWIS.NLCD.2001)%>%purrr::set_names(c('201
 # save(l.NWIS.NLCD, file='Processed_Data/l.NWIS.NLCD.Rdata')
 
 load('Processed_Data/l.NWIS.NLCD.Rdata')
-
-
 
 
 
@@ -706,6 +728,30 @@ df.NWIS.DEM$Name<-df.sf.NWIS.keep$Name
 save(df.NWIS.DEM, file= 'Processed_Data/df.NWIS.DEM.Rdata')
 
 # done with DEM
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #### Climate
 
@@ -812,6 +858,28 @@ df.sf.NWIS.keep<-df.sf.NWIS.keep%>%filter(!Name %in% c("01304000", "01305000", "
 # filter the predictor set to these sites:
 
 df.NWIS.Predictors<-filter(df.NWIS.Predictors, Name %in% df.sf.NWIS.keep$Name)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ##### Correlations
 
@@ -944,6 +1012,32 @@ df.OLS%>%
   st_as_sf(.)%>%
   mapview(., zcol = 'OLS.S')
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #### Grouping CQ curves (stationary, mobilization, dilutionary, complex) ####
 
 # create a list of dataframes for each sites CQ observations:
@@ -1062,6 +1156,28 @@ df.sf.NWIS.keep.2<-left_join(df.sf.NWIS.keep, distinct(df_Seg.2, site, .keep_all
 
 # mapview(df.sf.NWIS.keep.2, zcol = 'Type', alpha.regions = 'NEW')
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #### Categorizing land use ####
 
 # USGS criteria:
@@ -1084,26 +1200,26 @@ df.sf.NWIS.keep.2<-left_join(df.sf.NWIS.keep, distinct(df_Seg.2, site, .keep_all
 
 # merge land use from CDL and NLCD to df.sf.NWIS.keep.2 and add a yearcolumn:
 
-t1<-left_join(df.sf.NWIS.keep.2, df.NWIS.CDL%>%mutate(Year = '2020'), by = 'Name')
-t2<-left_join(df.sf.NWIS.keep.2, df.NWIS.CDL.2008%>%mutate(Year = '2008'), by = 'Name')
+t1<-left_join(df.sf.NWIS.keep.2, df.NWIS.CDL%>%mutate(LU_source = 'CDL_2020'), by = 'Name')
+t2<-left_join(df.sf.NWIS.keep.2, df.NWIS.CDL.2008%>%mutate(LU_source = 'CDL_2008'), by = 'Name')
+t3<-left_join(df.sf.NWIS.keep.2, l.NWIS.NLCD$`2019`%>%mutate(LU_source = 'NLCD_2019'), by = 'Name')
+t4<-left_join(df.sf.NWIS.keep.2, l.NWIS.NLCD$`2001`%>%mutate(LU_source = 'NLCD_2001'), by = 'Name')
 
 # merge the 2008 and 2020 CDL dfs and add a column to ID it is CDL:
 
-df.CDL.LU<-bind_rows(t1,t2)
-
-# add a column for 
+df.LU<-bind_rows(t1,t2,t3,t4)
 
 # combine Ag and Pasture into a single landuse for Ag:
 
-df.sf.NWIS.keep.2<-mutate(df.sf.NWIS.keep.2, Ag = Ag+Pasture)
+df.LU<-mutate(df.LU, Ag = Ag+Pasture)
 
 # set NA to zero
 
-df.sf.NWIS.keep.2[is.na(df.sf.NWIS.keep.2)]<-0
+df.LU[is.na(df.LU)]<-0
 
 # create the land use class column based on USGS critiera:
 
-df.NWIS.USGS.LU<-df.sf.NWIS.keep.2%>%
+df.LU<-df.LU%>%
   mutate(USGS.LU = 'Mixed')%>%
   mutate(USGS.LU = case_when(.default = 'Mixed',
     Ag > .50 & Developed <= .05 ~ 'Agriculture',
@@ -1113,28 +1229,28 @@ df.NWIS.USGS.LU<-df.sf.NWIS.keep.2%>%
 
 # merge the OLS and Sens slopes and intercepts with this df:
 
-df.NWIS.USGS.LU<-left_join(df.NWIS.USGS.LU, df.OLS_Sens[,1:5], by = 'Name')
+df.LU<-left_join(df.LU, df.OLS_Sens[,1:5], by = 'Name')
 
 # pivot longer for geom_box + facet:
 
-data<-df.NWIS.USGS.LU%>%
+data<-df.LU%>%
   pivot_longer(cols = 15:18, names_to = 'CQ_parameter', values_to = 'Value')%>%
   mutate(USGS.LU=factor(USGS.LU))
 
 # make ggplot:
 
-my_xlab <- paste(levels(factor(df.NWIS.USGS.LU$USGS.LU)),"\n(N=",table(factor(df.NWIS.USGS.LU$USGS.LU)),")",sep="")
+my_xlab <- paste(levels(factor(df.LU$USGS.LU)),"\n(N=",table(factor(df.LU$USGS.LU)),")",sep="")
 
-ggplot(data, aes(x=USGS.LU, y=Value))+
+ggplot(data, aes(x=LU_source, y=Value, color =USGS.LU ))+
   geom_boxplot(varwidth = TRUE, alpha=0.2)+
-  scale_x_discrete(labels=my_xlab)+
+  # scale_x_discrete(labels=my_xlab)+
   facet_wrap('CQ_parameter', scales = 'free')+
-  stat_compare_means(method = "anova", label.y = 2)+      # Add global p-value
+  stat_compare_means(method = "anova", label.y = max(data$Value))+      # Add global p-value
   stat_compare_means(label = "p.signif", method = "t.test",
                      ref.group = "0.5") +
-  ggtitle('Orginal USGS Thresholds using Aggregated 2020 CDL')
+  ggtitle('Orginal USGS Thresholds using Aggregated Data Layers')
 
-  
+
 
 # finally save image to workspace:
 

@@ -1038,6 +1038,184 @@ df.OLS%>%
 
 
 
+
+#### Categorizing land use ####
+
+# USGS criteria:
+# Agricultural sites have >50% agricultural land and ≤5% urban land;
+# urban sites have >25% urban and ≤25% agricultural land; 
+# undeveloped sites have ≤ 5% urban and ≤ 25% agricultural land; 
+# all other combinations of urban, agricultural, and undeveloped lands are classified as mixed
+
+# I have four different datasets to pull land use from:
+# NLCD 2001 and 2019
+# CDL 2008 and 2020
+
+# The plan is to make two facet plots, one for orginal USGS thresholds and one for adjusted USGS thresholds:
+# facets will be the different CQ parameters with x axis being the different land use catgeory andyaxis beung the parameter value
+# for each land use, color will be used to determine which dataset the values came from
+
+
+# In a first pass using these thresholds the number of ag and urban sites wasvery low
+# I will play with these numbers to see what happens
+
+# merge land use from CDL and NLCD to df.sf.NWIS.keep.2 and add a yearcolumn:
+
+t1<-left_join(df.sf.NWIS.keep.2, df.NWIS.CDL%>%mutate(LU_source = 'CDL_2020'), by = 'Name')
+t2<-left_join(df.sf.NWIS.keep.2, df.NWIS.CDL.2008%>%mutate(LU_source = 'CDL_2008'), by = 'Name')
+t3<-left_join(df.sf.NWIS.keep.2, l.NWIS.NLCD$`2019`%>%mutate(LU_source = 'NLCD_2019'), by = 'Name')
+t4<-left_join(df.sf.NWIS.keep.2, l.NWIS.NLCD$`2001`%>%mutate(LU_source = 'NLCD_2001'), by = 'Name')
+
+# merge the CDL and NLCD dfs:
+
+df.LU<-bind_rows(t1,t2,t3,t4)
+
+# combine Ag and Pasture into a single landuse for Ag:
+
+df.LU<-mutate(df.LU, Ag = Ag+Pasture)
+
+# set NA to zero
+
+df.LU[is.na(df.LU)]<-0
+
+# create the land use class column based on USGS critiera:
+
+# orginal thresholds:
+
+df.LU<-df.LU%>%
+  mutate(USGS.LU = 'Mixed')%>%
+  mutate(USGS.LU = case_when(.default = 'Mixed',
+                             Ag > .50 & Developed <= .05 ~ 'Agriculture',
+                             Developed > .25 & Ag <= .25 ~ 'Urban',
+                             Developed <= .05 & Ag <= .25 ~ 'Undeveloped')
+  )
+
+# adjusted thresholds:
+
+df.LU<-df.LU%>%
+  mutate(USGS.LU.Adjusted = 'Mixed')%>%
+  mutate(USGS.LU.Adjusted = case_when(.default = 'Mixed',
+                             Ag > .30 & Developed <= .1 ~ 'Agriculture',
+                             Developed > .1 & Ag <= .3 ~ 'Urban',
+                             Developed <= .1 & Ag <= .1 ~ 'Undeveloped'))
+
+# merge the OLS and Sens slopes and intercepts with this df:
+
+df.LU<-left_join(df.LU, df.OLS_Sens[,1:5], by = 'Name')
+
+# pivot longer for geom_box + facet:
+
+data<-df.LU%>%
+  pivot_longer(cols = 16:19, names_to = 'CQ_parameter', values_to = 'Value')%>%
+  mutate(USGS.LU=factor(USGS.LU))
+
+# make ggplot:
+
+# for orginal thresholds:
+
+my_xlab <- paste(levels(factor(df.LU$USGS.LU)),"\n(N=",table(factor(df.LU$USGS.LU)),")",sep="")
+
+ggplot(data, aes(x=LU_source, y=Value, color =USGS.LU ))+
+  geom_boxplot(varwidth = TRUE, alpha=0.2)+
+  # scale_x_discrete(labels=my_xlab)+
+  facet_wrap('CQ_parameter', scales = 'free')+
+  stat_compare_means(method = "anova", label.y = max(data$Value))+      # Add global p-value
+  stat_compare_means(label = "p.signif", method = "t.test",
+                     ref.group = "0.5") +
+  ggtitle('Adjusted USGS Thresholds using Aggregated Data Layers')
+
+# for adjusted thresholds:
+
+my_xlab <- paste(levels(factor(df.LU$USGS.LU.Adjusted)),"\n(N=",table(factor(df.LU$USGS.LU.Adjusted)),")",sep="")
+
+ggplot(data, aes(x=LU_source, y=Value, color =USGS.LU.Adjusted ))+
+  geom_boxplot(varwidth = TRUE, alpha=0.2)+
+  # scale_x_discrete(labels=my_xlab)+
+  facet_wrap('CQ_parameter', scales = 'free')+
+  stat_compare_means(method = "anova", label.y = max(data$Value))+      # Add global p-value
+  stat_compare_means(label = "p.signif", method = "t.test",
+                     ref.group = "0.5") +
+  ggtitle('Adjusted USGS Thresholds using Aggregated Data Layers')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##### Determine if CAFO is in watershed ####
+
+# read in CAFO locations and make sf dataframe
+
+CAFOs<-read.csv('Raw_data/Copy of CAFO-list-from-NYSDEC March 2021 with lat long values.csv')%>%
+  drop_na(longitude)%>%
+  drop_na(latitude)%>%
+  st_as_sf(., coords = c("longitude", "latitude"), crs = 4326)
+
+# add CAFOS to watershed map:
+
+mapview(df.sf.NWIS.keep)+
+  mapview(CAFOs, zcol = 'SIZE')
+
+# this file maps differently than the map on the DE website, but just going
+# to proceed with this file for now
+
+# determine how many CAFOs intersect each watershed:
+
+df.sf.NWIS.keep$CAFO_count <- lengths(st_intersects(df.sf.NWIS.keep, CAFOs))
+
+# make a map colored by CAFO count:
+
+mapview(df.sf.NWIS.keep, zcol = 'CAFO_count')
+
+# 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #### Grouping CQ curves (stationary, mobilization, dilutionary, complex) ####
 
 # create a list of dataframes for each sites CQ observations:
@@ -1141,7 +1319,40 @@ ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
     strip.text.x = element_blank()
   )
 
-# add the type to the mapping df:
+# I want to add land use as points color and OLS line with CQ type: to do this:
+# I also want to add number of CAFOs in watershed: to do this:
+
+# merge the plotting df with the land use for CDL 2020 and adjusted thresholds:
+
+df_Seg.2<-left_join(df_Seg.2, df.LU%>%filter(LU_source == 'CDL_2020')%>%select(Name, USGS.LU.Adjusted), by = c('site'='Name'))
+
+# merge the plotting df with the CAFO count:
+
+df_Seg.2<-left_join(df_Seg.2, df.sf.NWIS.keep%>%select(Name, CAFO_count)%>%st_set_geometry(NULL), by = c('site'='Name'))
+
+# if CAF count is zero set to NA:
+
+df_Seg.2$CAFO_count[df_Seg.2$CAFO_count==0]<-NA
+
+
+# plot:
+
+ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
+  geom_point(aes(color = Type))+
+  scale_color_manual(name = "CQ Type", values = c("purple", "red", "blue", "green"))+
+  geom_smooth(method = 'lm')+
+  geom_line(aes(x = Q, y = Seg_C), color = 'yellow', size = 1.5)+
+  geom_text(aes(x = -2.5, y = 0, label = CAFO_count), inherit.aes = FALSE)+
+  facet_wrap(dplyr::vars(n_sample_rank), scales = 'fixed')+
+  theme(
+    strip.background = element_blank(),
+    strip.text.x = element_blank()
+  )+
+  geom_rect(data = df_Seg.2%>%distinct(df_Seg.2$site, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, fill = USGS.LU.Adjusted), alpha = .15)+
+  scale_fill_manual(name = "USGS Landuse\n(Adjusted)", values = c("red", "blue","purple", "green"))
+  
+  
+# add CQ type to the mapping df:
 
 df.sf.NWIS.keep.2<-left_join(df.sf.NWIS.keep, distinct(df_Seg.2, site, .keep_all = T)%>%select(.,c(site, Type, n_sample_rank)), by = c('Name'='site'))%>%
   select(Name, Type, n_sample_rank)%>%
@@ -1154,7 +1365,7 @@ df.sf.NWIS.keep.2<-left_join(df.sf.NWIS.keep, distinct(df_Seg.2, site, .keep_all
                          n >=500 ~ .9))
 # map:
 
-# mapview(df.sf.NWIS.keep.2, zcol = 'Type', alpha.regions = 'NEW')
+mapview(df.sf.NWIS.keep.2, zcol = 'Type', alpha.regions = 'NEW')
 
 
 
@@ -1178,77 +1389,17 @@ df.sf.NWIS.keep.2<-left_join(df.sf.NWIS.keep, distinct(df_Seg.2, site, .keep_all
 
 
 
-#### Categorizing land use ####
-
-# USGS criteria:
-# Agricultural sites have >50% agricultural land and ≤5% urban land;
-# urban sites have >25% urban and ≤25% agricultural land; 
-# undeveloped sites have ≤ 5% urban and ≤ 25% agricultural land; 
-# all other combinations of urban, agricultural, and undeveloped lands are classified as mixed
-
-# I have four different datasets to pull land use from:
-# NLCD 2001 and 2019
-# CDL 2008 and 2020
-
-# The plan is to make two facet plots, one for orginal USGS thresholds and one for adjusted USGS thresholds:
-# facets will be the different CQ parameters with x axis being the different land use catgeory andyaxis beung the parameter value
-# for each land use, color will be used to determine which dataset the values came from
 
 
-# In a first pass using these thresholds the number of ag and urban sites wasvery low
-# I will play with these numbers to see what happens
 
-# merge land use from CDL and NLCD to df.sf.NWIS.keep.2 and add a yearcolumn:
 
-t1<-left_join(df.sf.NWIS.keep.2, df.NWIS.CDL%>%mutate(LU_source = 'CDL_2020'), by = 'Name')
-t2<-left_join(df.sf.NWIS.keep.2, df.NWIS.CDL.2008%>%mutate(LU_source = 'CDL_2008'), by = 'Name')
-t3<-left_join(df.sf.NWIS.keep.2, l.NWIS.NLCD$`2019`%>%mutate(LU_source = 'NLCD_2019'), by = 'Name')
-t4<-left_join(df.sf.NWIS.keep.2, l.NWIS.NLCD$`2001`%>%mutate(LU_source = 'NLCD_2001'), by = 'Name')
 
-# merge the 2008 and 2020 CDL dfs and add a column to ID it is CDL:
 
-df.LU<-bind_rows(t1,t2,t3,t4)
 
-# combine Ag and Pasture into a single landuse for Ag:
 
-df.LU<-mutate(df.LU, Ag = Ag+Pasture)
 
-# set NA to zero
 
-df.LU[is.na(df.LU)]<-0
 
-# create the land use class column based on USGS critiera:
-
-df.LU<-df.LU%>%
-  mutate(USGS.LU = 'Mixed')%>%
-  mutate(USGS.LU = case_when(.default = 'Mixed',
-    Ag > .50 & Developed <= .05 ~ 'Agriculture',
-    Developed > .25 & Ag <= .25 ~ 'Urban',
-    Developed <= .05 & Ag <= .25 ~ 'Undeveloped')
-  )
-
-# merge the OLS and Sens slopes and intercepts with this df:
-
-df.LU<-left_join(df.LU, df.OLS_Sens[,1:5], by = 'Name')
-
-# pivot longer for geom_box + facet:
-
-data<-df.LU%>%
-  pivot_longer(cols = 15:18, names_to = 'CQ_parameter', values_to = 'Value')%>%
-  mutate(USGS.LU=factor(USGS.LU))
-
-# make ggplot:
-
-my_xlab <- paste(levels(factor(df.LU$USGS.LU)),"\n(N=",table(factor(df.LU$USGS.LU)),")",sep="")
-
-ggplot(data, aes(x=LU_source, y=Value, color =USGS.LU ))+
-  geom_boxplot(varwidth = TRUE, alpha=0.2)+
-  # scale_x_discrete(labels=my_xlab)+
-  facet_wrap('CQ_parameter', scales = 'free')+
-  stat_compare_means(method = "anova", label.y = max(data$Value))+      # Add global p-value
-  stat_compare_means(label = "p.signif", method = "t.test",
-                     ref.group = "0.5") +
-  ggtitle('Orginal USGS Thresholds using Aggregated Data Layers')
 
 
 

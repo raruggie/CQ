@@ -42,9 +42,7 @@ df.NWIS.USGS.LU<-df.sf.NWIS.keep.2%>%
   mutate(USGS.LU = case_when(.default = 'Mixed',
                              Ag > .30 & Developed <= .1 ~ 'Agriculture',
                              Developed > .1 & Ag <= .3 ~ 'Urban',
-                             Developed <= .1 & Ag <= .1 ~ 'Undeveloped'
-  )
-  )
+                             Developed <= .1 & Ag <= .1 ~ 'Undeveloped'))
 
 # merge the OLS and Sens slopes and intercepts with this df:
 

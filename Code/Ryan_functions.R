@@ -222,21 +222,25 @@ st_snap_points = function(x, y, max_dist = 1000) {
 
 # test variables for function building:
 
-# parameter_code<-'00665' # pcode for TP
+parameter_code<-'00665' # pcode for TP
 # 
-# df.flow_query<-df.NWIS.Q_sites
+df.flow_query<-df.NWIS.Q_sites
 
-fun.df.Pair_consit_flow<-function(parameter_code, df.flow_query, n_samples = 20) {
+fun.df.Pair_consit_flow<-function(parameter_code, df.flow_query, n_samples = 20, state = 'VT') {
   
   # download metadata for the sites in NY with data of the constituent of interest:
   
-  df.consit_fun<-whatNWISdata(stateCd="NY",parameterCd=parameter_code)
+  df.consit_fun<-whatNWISdata(stateCd=state,parameterCd=parameter_code)
   
   # reduce duplicate site entries:
   
   df.consit_fun<-df.consit_fun%>% 
     group_by(site_no)%>% 
     slice(which.max(count_nu)) 
+  
+  # make sure the site_no columns are the same class:
+  
+  df.flow_query<-df.flow_query%>%mutate(site_no = as.character(site_no))
   
   # pair up this dataframe with the flow query dataframe:
   # select only asubsetof columns

@@ -55,7 +55,9 @@ source("Code/Ryan_functions.R")
 
 df.NWIS.Q_sites<- whatNWISdata(stateCd = 'NY', parameterCd = "00060")
 
-write.csv(df.NWIS.Q_sites, "C:/PhD/CQ/Raw_Data/df.NWIS.Q_sites.csv", row.names=FALSE)
+# write.csv(df.NWIS.Q_sites, "C:/PhD/CQ/Raw_Data/df.NWIS.Q_sites.csv", row.names=FALSE)
+
+df.NWIS.Q_sites <- read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.Q_sites.csv", colClasses = c(site_no = "character"))
 
 # clean up this dataframe
 
@@ -82,20 +84,26 @@ df.NWIS.Q_sites<-df.NWIS.Q_sites%>%
 
 df.NWIS.TP_sites<-fun.df.Pair_consit_flow('00665', df.NWIS.Q_sites, n_samples = 20)
 
-write.csv(df.NWIS.TP_sites, "C:/PhD/CQ/Raw_Data/df.NWIS.TP_sites.csv", row.names=FALSE)
+# write.csv(df.NWIS.TP_sites, "C:/PhD/CQ/Raw_Data/df.NWIS.TP_sites.csv", row.names=FALSE)
+
+df.NWIS.TP_sites<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.TP_sites.csv", colClasses = c(site_no = "character"))
 
 # download the raw daily flow data for these sites. To do this:
 # readNWISdv can be used to download a single dataframe with all the raw flow data for a vector of gauge numbers (this takes a looong time):
 
 df.NWIS.Q<-readNWISdv(siteNumbers = df.NWIS.TP_sites$site_no, parameterCd = '00060', startDate = "", endDate = "", statCd = "00003")
 
-write.csv(df.NWIS.Q, "C:/PhD/CQ/Raw_Data/df.NWIS.Q.csv", row.names=FALSE)
+# write.csv(df.NWIS.Q, "C:/PhD/CQ/Raw_Data/df.NWIS.Q.csv", row.names=FALSE)
+
+df.NWIS.Q<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.Q.csv", colClasses = c(site_no = "character"))
 
 # download the raw discrete TP sample data:
 
 df.NWIS.TP<-readNWISqw(siteNumbers = df.NWIS.TP_sites$site_no, parameterCd = '00665')
 
-write.csv(df.NWIS.TP, "C:/PhD/CQ/Raw_Data/df.NWIS.TP.csv", row.names=FALSE)
+# write.csv(df.NWIS.TP, "C:/PhD/CQ/Raw_Data/df.NWIS.TP.csv", row.names=FALSE)
+
+df.NWIS.TP<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.TP.csv", colClasses = c(site_no = "character"))
 
 # now join the TP with the flow df:
 
@@ -111,11 +119,8 @@ df.NWIS.TP_CQ<-df.NWIS.TP_CQ%>%drop_na(X_00060_00003)
 
 temp<-df.NWIS.TP%>%group_by(site_no)%>%
   summarise(n=n())%>%
-  arrange(desc(n))
-
-# add a column with the rank:
-
-temp$n_sample_rank<-1:nrow(temp)
+  arrange(desc(n))%>%
+  mutate(n_sample_rank=rank(-n, ties.method='first'))
 
 # finally merge this df with df.NWIS.TP_CQ and arrange by the new column:
 
@@ -128,7 +133,9 @@ df.NWIS.TP_CQ<-left_join(df.NWIS.TP_CQ,temp, by='site_no')%>%
 
 df.NWIS.TP_site_metadata<-readNWISsite(siteNumbers = unique(df.NWIS.TP_CQ$site_no))
 
-write.csv(df.NWIS.TP_site_metadata, "C:/PhD/CQ/Raw_Data/df.NWIS.TP_site_metadata.csv", row.names=FALSE)
+# write.csv(df.NWIS.TP_site_metadata, "C:/PhD/CQ/Raw_Data/df.NWIS.TP_site_metadata.csv", row.names=FALSE)
+
+df.NWIS.TP_site_metadata<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.TP_site_metadata.csv", colClasses = c(site_no = "character"))
 
 # then select just the site number and DA column:
 
@@ -163,7 +170,7 @@ temp.loop<-sort(unique(df.NWIS.TP_CQ_for_BP$site_no))
 
 # test i for for loop building:
 
-# i<-unique(df.NWIS.TP_CQ_for_BP$site_no)[4]
+# i<-4
 
 # loop through the sites:
 
@@ -233,9 +240,9 @@ for (i in seq_along(temp.loop)){
     # reformat this dataframe to export out of the loop
     
     if(length(class(m_seg))==2){
-      result_df<-fit%>%mutate(site = temp.loop[i], Q_real = df$Q, C = df$C, I1 = inter$Est.[1], I2 = inter$Est.[2], Slope1 = s[1,1], Slope2 = s[2,1], BP = bp)
+      result_df<-fit%>%mutate(site = temp.loop[i], Date = df$sample_dt, n = df$n, Q_real = df$Q, C = df$C, I1 = inter$Est.[1], I2 = inter$Est.[2], Slope1 = s[1,1], Slope2 = s[2,1], BP = bp)
     } else{
-      result_df<-fit%>%mutate(site = temp.loop[i], Q_real = df$Q, C = df$C, I1 = NA, I2 = NA, Slope1 = NA, Slope2 = NA, BP = NA)
+      result_df<-fit%>%mutate(site = temp.loop[i], Date = df$sample_dt, n = df$n, Q_real = df$Q, C = df$C, I1 = NA, I2 = NA, Slope1 = NA, Slope2 = NA, BP = NA)
     }
     
     l_Seg[[i]]<-result_df
@@ -285,6 +292,8 @@ p<-ggplot(df_Seg, aes(x = log(Q_real), y = log(C)))+
     strip.text.x = element_blank()
   )
 
+# p
+
 # Done with NWIS! the two dataframes moving on are 
 # df.NWIS.TP_CQ and df.NWIS.TP_site_metadata
 
@@ -300,11 +309,38 @@ map.NWIS.TP_sites<-df.NWIS.TP_site_metadata%>%
   mutate(site_id= paste(site_no, station_nm), n = NA, .before = 1)%>%
   select(c(1:3))
 
-mapview(map.NWIS.TP_sites)
+# mapview(map.NWIS.TP_sites)
 
 # save(map.NWIS.TP_sites, file = 'C:/PhD/CQ/Processed_Data/map.NWIS.TP_sites.Rdata')
 
-####################### Run through CQ metrics/watershed attribute correlation #######################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### Tradeoff matrix ####
 
 # build a matrix of the number of TP samples as a function of watershed size. To do this:
 
@@ -345,31 +381,75 @@ for (i in seq_along(n_sam)){
   
 }
 
-# going to use this matrix to pick subsets of the NWIS sites and see how it affects the correlations analysis:
+m
 
-# correlation analysis (adapated from Skan_CQ.R):
 
-# create a single dataframe of the CQ observations and watershed attributes for all sites. to do this:
 
-# read in the gauges 2 database (I am forgoing the datalayers workflow for now since I may have a great set of predictors in this database):
 
-# read in all sheets using function, remove the last element (does notcomtain useful info), and convert to a single df:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### Watershed Attributes (for correlation, eventually) ####
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### Gauges 2 (Not run) ####
+
+# read in the gauges 2 database (I am forgoing the datalayers workflow for now since I may have a great set of predictors in this database): to do this:
+
+# read in all sheets using function
 
 l.G2 <- read_excel_allsheets("Raw_Data/gagesII_sept30_2011_conterm.xlsx")
 
+# remove the last element (does notcomtain useful info)
+
 l.G2[[27]]<-NULL
+
+# and convert to a single df
 
 df.G2<-reduce(l.G2, full_join, by = "STAID")
 
 # filter the gauges2 to the NYS TP CQ sites:
 
-df.G2<-df.G2%>%filter(STAID %in% unique(df.NWIS.TP_CQ$site_no))
+df.G2<-df.G2%>%filter(STAID %in% TP_sites$site_no)
 
 # only 89 of the orginal 137 sites are in gauges 2
 
 # lets see what the tradeoff matrix looks like if only these 89 are included:
 
-TP_sites<-df.NWIS.TP_CQ%>%
+TP_sites.2<-df.NWIS.TP_CQ%>%
   filter(site_no %in% df.G2$STAID)%>%
   distinct(site_no, .keep_all = T)
 
@@ -383,7 +463,7 @@ min_DA<- c(25,50,100,150,250,500,1000)
 
 for (i in seq_along(n_sam)){
   
-  temp.i<-TP_sites%>%filter(n>n_sam[i])
+  temp.i<-TP_sites.2%>%filter(n>n_sam[i])
   
   m$Unlimited[i]<-dim(temp.i)[1]
   
@@ -399,9 +479,37 @@ for (i in seq_along(n_sam)){
   
 }
 
-# I cant make the call, 
-# iwantto just stick withthe plan, so now going back to datalayers analysis
-# so now I need to delinate the 137 NWIS sites:
+m
+
+# We didnt end up using this tradeoff matrix
+# the issue is that the attributs that comewiththe streamstatsdownloads I dont think are accurate
+# (I thinkthere are lots of extra zeros)
+# this makes me want to use the gauges 2 sites for the correlaitons/regressions with CQ parameters
+
+# I am writing post going through the datalayer downloads and processing below
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### Delinating Watersheds ####
+
+# delinate the 137 NWIS sites:
 
 l.SS_WS.NWIS<-lapply(seq_along(df.NWIS.TP_site_metadata$site_no), \(i) Delineate(df.NWIS.TP_site_metadata$dec_long_va[i], df.NWIS.TP_site_metadata$dec_lat_va[i]))
 
@@ -440,7 +548,7 @@ df.sf.NWIS$Delination_Error<-(df.sf.NWIS$area_sqmi-df.sf.NWIS$drain_area_va)/df.
 temp<-df.sf.NWIS[,c(1,107)]%>%
   filter(abs(Delination_Error)>.02)
 
-mapview(temp)
+# mapview(temp)
   
 # after playing with the numbers, 2% seems like a good threshold for non-delineations:
 # subset df.sf to those sites that are considered to delineate correctly:
@@ -449,18 +557,66 @@ df.sf.NWIS.keep<-df.sf.NWIS%>%filter(abs(Delination_Error)<=.02)
 
 # note I suspect that snapping the lat long to nhd would improve the delineation success notgoing to do that now
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #### Data Layers ####
 
 # now run the datalayers workflow for these sites:
 
-#### CDL: 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### CDL: ####
 
 # note when I ran ths CDL code block I used the 103 sites thatwere apartofthe set, this is prior to filtering based onthe CDLdate... so I am just going to filter the resulting CDL df at the end. Just note that what is saved is of the 103 sites, but that the code doesnt reflect this, i.e. I just ran the filter anddidnt keep the code because df.NWIS.TP.keep would be down to 56 if I did it right 
 
 # download:
 
-rast.NWIS.CDL.2020 <- GetCDLData(aoi = df.sf.NWIS.keep, year = "2020", type = "b", tol_time = 1000)
-rast.NWIS.CDL.2008 <- GetCDLData(aoi = df.sf.NWIS.keep, year = "2008", type = "b", tol_time = 1000)
+rast.NWIS.CDL.2020 <- GetCDLData(aoi = df.sf.NWIS, year = "2020", type = "b", tol_time = 1000)
+rast.NWIS.CDL.2008 <- GetCDLData(aoi = df.sf.NWIS, year = "2008", type = "b", tol_time = 1000)
 
 # convert to rast:
 
@@ -475,11 +631,11 @@ crs(rast.NWIS.CDL.2008)
 # plot
 
 # plot(rast.NWIS.CDL.2020)
-plot(rast.NWIS.CDL.2008)
+# plot(rast.NWIS.CDL.2008)
 
 # reproject to sample watershed vector data to match raster data:
 
-vect.NWIS<-vect(df.sf.NWIS.keep) # need to first ininalize vect since sometimes reading in rdata file (terra issue)
+vect.NWIS<-vect(df.sf.NWIS) # need to first ininalize vect since sometimes reading in rdata file (terra issue)
 
 vect.NWIS.proj<-terra::project(vect.NWIS, crs(rast.NWIS.CDL.2008))
 
@@ -527,8 +683,8 @@ l.NWIS.CDL.2008<-lapply(l.NWIS.CDL.2008, \(i) i%>%mutate(Var1 = as.integer(as.ch
 
 # set names of list:
 
-names(l.NWIS.CDL)<-df.sf.NWIS.keep$Name # note doesnt work with the workflow set up to filter on 2008 limiter
-names(l.NWIS.CDL.2008)<-df.sf.NWIS.keep$Name # note doesnt work with the workflow set up to filter on 2008 limiter
+names(l.NWIS.CDL)<-df.sf.NWIS$Name # note doesnt work with the workflow set up to filter on 2008 limiter
+names(l.NWIS.CDL.2008)<-df.sf.NWIS$Name # note doesnt work with the workflow set up to filter on 2008 limiter
 
 # combine list into single df:
 
@@ -564,7 +720,13 @@ df.NWIS.CDL.2008<-df.NWIS.CDL.2008[,-2]%>%
 sort(rowSums(df.NWIS.CDL[,-1], na.rm = T))
 sort(rowSums(df.NWIS.CDL.2008[,-1], na.rm = T))
 
-# looks good. 
+# one of the CDL 2020 is low:
+
+which.min(rowSums(df.NWIS.CDL[,-1], na.rm = T))
+
+# this is a long island site, so doesnt matter
+
+# other than that site looks good. 
 
 # Done with CDL
 
@@ -573,7 +735,31 @@ sort(rowSums(df.NWIS.CDL.2008[,-1], na.rm = T))
 
 # but first I'm going to look at the differences in the CDL between 2008 and 2020
 
-#### NLCD: 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### NLCD (Not run) ####
 
 # the CDL and NLCD differ in that the CDL combined Pasture and grassland while the nLCD does not
 # thus, even though the CDL can be agrgated to et close to the NLCD, I want to also have the nLCD
@@ -685,13 +871,13 @@ load('Processed_Data/l.NWIS.NLCD.Rdata')
 
 
 
-#### NED
+#### NED ####
 
 # download:
 
-DEM.NWIS<-get_ned(df.sf.NWIS.keep, label = '2') # already SpatRaster!
+DEM.NWIS<-get_ned(df.sf.NWIS, label = '2') # already SpatRaster!
 
-writeRaster(DEM.NWIS, file='Downloaded_Data/DEM.NWIS.tif')
+writeRaster(DEM.NWIS, file='Downloaded_Data/DEM.NWIS.tif', overwrite=TRUE)
 
 # plot(DEM.NWIS)
 
@@ -707,7 +893,7 @@ f <- function(x, na.rm = T) {
 
 # reproject NWIS basins to DEM crs:
 
-vect.NWIS<-vect(df.sf.NWIS.keep)
+vect.NWIS<-vect(df.sf.NWIS)
 
 vect.NWIS.proj<-terra::project(vect.NWIS, crs(DEM.NWIS))
 
@@ -721,11 +907,13 @@ names(df.NWIS.DEM)<-c('Name', 'Elev_Avg', 'Elev_Range', 'Elev_SD')
 
 # set the names of the sites:
 
-df.NWIS.DEM$Name<-df.sf.NWIS.keep$Name
+df.NWIS.DEM$Name<-df.sf.NWIS$Name
 
 # finally save the df:
 
-save(df.NWIS.DEM, file= 'Processed_Data/df.NWIS.DEM.Rdata')
+# save(df.NWIS.DEM, file= 'Processed_Data/df.NWIS.DEM.Rdata')
+
+load('Processed_Data/df.NWIS.DEM.Rdata')
 
 # done with DEM
 
@@ -753,7 +941,7 @@ save(df.NWIS.DEM, file= 'Processed_Data/df.NWIS.DEM.Rdata')
 
 
 
-#### Climate
+#### Climate (not run) ####
 
 # steps:
 
@@ -834,9 +1022,174 @@ names(df.NWIS.Climate)[1]<-'Name'
 
 save(df.NWIS.Climate, file = 'Processed_Data/df.NWIS.Climate.Rdata')
 
-## combine climate,CDL, DEM, and SS_WS to one df:
 
-df.NWIS.Predictors<-left_join(df.NWIS.CDL,df.NWIS.DEM, by = 'Name')%>%left_join(.,df.NWIS.Climate, by = 'Name')%>%left_join(.,df.sf.NWIS.keep, by = 'Name')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##### Determine if CAFO is in watershed ####
+
+# read in CAFO locations and make sf dataframe
+
+CAFOs<-read.csv('Raw_data/Copy of CAFO-list-from-NYSDEC March 2021 with lat long values.csv')%>%
+  drop_na(longitude)%>%
+  drop_na(latitude)%>%
+  st_as_sf(., coords = c("longitude", "latitude"), crs = 4326)
+
+# add CAFOS to watershed map:
+
+# mapview(df.sf.NWIS.keep)+
+#   mapview(CAFOs, zcol = 'SIZE')
+
+# this file maps differently than the map on the DE website, but just going
+# to proceed with this file for now
+
+# determine how many CAFOs intersect each watershed:
+
+df.sf.NWIS.keep$CAFO_count <- lengths(st_intersects(df.sf.NWIS.keep, CAFOs))
+
+# make a map colored by CAFO count:
+
+# mapview(df.sf.NWIS.keep, zcol = 'CAFO_count')
+
+#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### Determine a final set of sites ####
+
+# right now there are:
+
+# 103 sites with good delinations and thus watershed attributes from data layers
+# and streamstats. However, I dont trust the streamstats values... 
+
+# 89 sites that are in gauges 2 irrespective of the delinations. I am leaning towards
+# using these sites. However, gauges 2 isnt a perfect database to just through into the 
+# correlaiton analysis since there are lots of climate variables that I know from previous runs 
+# will come up as highly correlated.
+
+# I think what is smart is to come up with a currated gauges 2 set:
+# I did this in excel, detelting the sheets I didnt want:
+# might need to resource the functions code:
+
+source("Code/Ryan_functions.R")
+l.G2 <- read_excel_allsheets("Raw_Data/gagesII_sept30_2011_conterm_EDITED_again.xlsx")
+
+# reduce the sheets (list elements) into a single df:
+
+df.G2<-reduce(l.G2, full_join, by = "STAID")
+
+# select the first column andthe numeric ones after:
+
+df.G2<-select(df.G2, STAID | where(is.numeric))
+
+# filter the gauges2 to the NYS TP CQ sites:
+
+df.G2<-df.G2%>%filter(STAID %in% TP_sites$site_no)
+
+# add the n_sample_rank: to do this:
+# rerun the temp dataframe (since I keep writing over it in different sections:
+
+temp<-df.NWIS.TP%>%group_by(site_no)%>%
+  summarise(n=n())%>%
+  arrange(desc(n))%>%
+  mutate(n_sample_rank=rank(-n, ties.method='first'))
+
+# left join to add n_sample rank column:
+
+df.G2<-left_join(df.G2, temp, by = c('STAID'='site_no'))
+
+# I want look at the number of years of data for each of these:
+
+G2_n_years<-filter(df.NWIS.TP_CQ, site_no %in% df.G2$STAID)%>%
+  group_by(site_no)%>%
+  summarize(min_date=min(year(sample_dt)),
+            max_date=max(year(sample_dt)),
+            n_years=max(year(sample_dt))-min(year(sample_dt)))%>%
+  arrange(desc(n_years))
+
+# I want to look at the time series of the sites with little years of data: to do this:
+
+# filter to sits with lessthan 10 years of data:
+
+x<-filter(G2_n_years, n_years<10)
+
+# plot:
+
+filter(df.NWIS.TP_CQ, site_no %in% x$site_no)%>%
+  # filter(., n_sample_rank==196)%>%
+  ggplot(., aes(x = as.Date(sample_dt), y = result_va))+
+  geom_point()+
+  facet_wrap('n_sample_rank', scales ='free')
+
+# from this plot the following sites I say have good data even though they have less than 10 years of samples:
+
+below_10_keep<-c(46,70,72,118,119,120,122,125,126,134)
+
+# now come up with a final list of sites: to do this:
+
+# merge the n_samplerank and n_years dfs and filter based on n_years and the numbers of n_sample_ranks in below_10_keep:
+
+G2_keep<-left_join(G2_n_years, temp, by = 'site_no')%>%
+  filter(., n_years>=10 | n_sample_rank %in% below_10_keep)
+
+# make a plot:
+
+p1<-filter(df.NWIS.TP_CQ, site_no %in% G2_keep$site_no)%>%
+  # filter(., n_sample_rank==196)%>%
+  ggplot(., aes(x = sample_dt, y = result_va))+
+  facet_wrap('n_sample_rank', scales ='free')+
+  geom_point()
+
+# now filter the gauges2 to these sites:
+
+df.G2<-filter(df.G2, STAID %in% G2_keep$site_no)
+
+####~~~~~~~#### (Not Run)
+
+# below isthe old workflow where Ifiltered 
+# based on CDL:
 
 # of these sites, Iwant to filter down those that havedata during the CDLperiod
 # the CDL goes back to 2008: todothis:
@@ -880,34 +1233,15 @@ df.NWIS.Predictors<-filter(df.NWIS.Predictors, Name %in% df.sf.NWIS.keep$Name)
 
 
 
-
-##### Correlations
-
-# in the first pass, all predictors were included
-# in a second pass, predictors with lots of zeros are removed:
-
-# second pass filter:
-# select only numeric columns in df.NWIS.predictors:
-x<-df.NWIS.Predictors%>%dplyr::select(where(is.numeric))
-#set NAs to zero:
-x[is.na(x)] <- 0
-# determine the percentage of cells which are zero in eachcolumn, 
-# turn into a dataframe, 
-# pivot longer,
-# filter for predictors with greater than 50% of observations being zero:
-x<-lapply(x, function(x){ length(which(x==0))/length(x)})%>%
-  bind_rows(.)%>%
-  pivot_longer(cols = everything(), values_to = 'Value', names_to = 'Type')%>%
-  filter(Value > .5)
-
-# set up a datatframe to feed into eachOLSand sens pipes:
+#### Correlations (using gauges2sites) ####
 
 # combined the predictors df with the cq data:
 
 temp<-df.NWIS.TP_CQ%>%
   rename(Name = site_no)%>%
-  filter(Name %in% df.sf.NWIS.keep$Name)%>%
-  left_join(., df.NWIS.Predictors, by = 'Name')%>%
+  filter(Name %in% df.G2$STAID)%>%
+  select(Name, sample_dt,result_va, X_00060_00003)%>%
+  left_join(., df.G2, by = c('Name'='STAID'))%>%
   mutate(log_C = log(result_va), log_Q = log(X_00060_00003), C = result_va, Q = X_00060_00003)%>%
   filter(is.finite(log_C))%>%
   filter(is.finite(log_Q))
@@ -935,9 +1269,8 @@ df.Sens<-temp%>%
 df.OLS_Sens<-left_join(df.OLS, df.Sens, by = 'Name')
 
 # merge back the watershed characteristic data to this dataframe:
-# for a second pass, deselect the columns names in x:
 
-df.OLS_Sens<-left_join(df.OLS_Sens, df.NWIS.Predictors%>%select(-x$Type), by = 'Name')
+df.OLS_Sens<-left_join(df.OLS_Sens, df.G2, by = c('Name'='STAID'))
 
 # now run correlations between intercepts and slopes and watershed characteristics. to do this: (I orginally did this workflow using n_months (C:\PhD\Research\Mohawk\Code\Mohawk_Regression-analyizing_predictor_df.R)
 
@@ -948,69 +1281,178 @@ n_sites<-dim(df.OLS_Sens)[1]
 # use the corrr package to correlate() and focus() on your variable of choice
 
 df.cor <- df.OLS_Sens %>% 
-  correlate() %>% 
+  # correlate() %>%
+  correlate(method = 'spearman') %>%
   focus(c(OLS.I, OLS.S, Sen.I, Sen.S))%>%
-  pivot_longer(cols= c(2:5), names_to = 'CQ_Parameter', values_to = 'Pearson_Correlation')%>%
-  mutate(p_val = round(2*pt(-abs(Pearson_Correlation*sqrt((n_sites-2)/(1-(Pearson_Correlation)^2))), n_sites-2),2))%>%
+  pivot_longer(cols= c(2:5), names_to = 'CQ_Parameter', values_to = 'Spearman_Correlation')%>%
+  mutate(p_val = round(2*pt(-abs(Spearman_Correlation*sqrt((n_sites-2)/(1-(Spearman_Correlation)^2))), n_sites-2),2))%>%
   mutate(sig_0.05 = ifelse(p_val <= 0.05, 'sig', 'not'))%>%
   drop_na(p_val) # some standard deviaitons return NA because the watershed characteristic values are zero
 
-# then plotresults: todo this:
+# then plot results: todo this:
 
 # create a list of each CQ parameter (4: OLS and Sens slope and intercept)and format it for ggplotting:
 
 l.cor<-df.cor %>%
   split(., df.cor$CQ_Parameter)%>%
-  lapply(., \(i) i%>%mutate(term = factor(term, levels = unique(term[order(Pearson_Correlation)])))%>%filter(!between(Pearson_Correlation, -0.25,.25))) # Order by correlation strength
+  lapply(., \(i) i%>%
+           mutate(best = abs(Spearman_Correlation))%>%
+           slice_max(order_by = best, n = 10)%>%
+           mutate(sig_0.05 = factor(sig_0.05, levels = c('not', 'sig')))%>%
+           mutate(term = factor(term, levels = unique(term[order(Spearman_Correlation)])))%>%
+           filter(!between(Spearman_Correlation, -0.25,.25))) # Order by correlation strength
 
-plist<-lapply(l.cor, \(i) i%>%ggplot(aes(x = term, y = Pearson_Correlation, color = sig_0.05)) +
+# make plot list using lapply:
+
+plist<-lapply(l.cor, \(i) i%>%ggplot(aes(x = term, y = Spearman_Correlation, color = sig_0.05)) +
                 geom_bar(stat = "identity") +
+                scale_color_manual(values = c("not" = "red", "sig" = "blue"),na.value = NA)+
                 facet_wrap('CQ_Parameter')+
-                ylab(paste('Pearson Correlation')) +
+                ylab(paste('Spearman Correlation')) +
                 xlab("Watershed Attribute")+
                 theme(axis.text.x=element_text(angle=40,hjust=1))+
                 theme(legend.position="bottom"))
 
-ggpubr::ggarrange(plotlist = plist, ncol=2, nrow=2, common.legend = TRUE, legend="bottom")
+# arrange plots:
+
+p1<-ggpubr::ggarrange(plotlist = plist, ncol=2, nrow=2, common.legend = TRUE, legend="bottom")
+
+p1
+
+save(p1, file = 'Processed_Data/p1.Rdata')
 
 # univariate plots of the top correlates/small land use types:
 
 # Lets do plots of OLS slope: to do this:
 
-# determine the top correlates:
+# determine the top correlates (the numberof the list determined which CQ parameter)
+# here 1 = OLS intercept:
 
-OLS<-l.cor[[2]]%>%arrange(desc(Pearson_Correlation))
+OLS<-l.cor[[2]]%>%arrange(desc(Spearman_Correlation))
 
 # make univariate plots (facets) of different land uses and OLS slopes:
 
-df.OLS%>%left_join(.,df.NWIS.Predictors%>%select(c(Name, OLS$term)), by = 'Name')%>%
-  pivot_longer(cols = 4:10, names_to = 'Type', values_to = 'Value')%>%
+df.OLS%>%left_join(.,df.G2%>%select(c(STAID, OLS$term)), by = c('Name'='STAID'))%>%
+  pivot_longer(cols = c(4:last_col()), names_to = 'Type', values_to = 'Value')%>%
   drop_na(Value)%>%
-  ggplot(., aes(x = Value, y = OLS.S))+
+  mutate_if(is.numeric, ~replace(., . == 0, NA))%>%
+  ggplot(., aes(x = Value, y = !!sym(OLS$CQ_Parameter[1])))+
   geom_smooth(method = 'lm')+
   geom_point()+
   facet_wrap('Type', scales = 'free')
 
 
-# CQplot of all sites:
 
-ggplot(temp, aes(x = log_Q, y = log_C))+
-  geom_point()+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### Correlations (using Data Layers that overlap with gauges 2 sites) ####
+
+# Now run the correaltions using the data layers predictors:
+
+datalayers.pred<-left_join(df.NWIS.CDL,df.NWIS.DEM, by = 'Name')%>%
+  # left_join(.,df.NWIS.Climate, by = 'Name')%>%
+  # left_join(.,df.sf.NWIS.keep, by = 'Name')%>%
+  ungroup()%>%
+  filter(Name %in% df.G2$STAID)%>%
+  left_join(., df.sf.NWIS.keep%>%select(Name, CAFO_count), by = 'Name')%>%
+  select(-geometry)
+
+# remove the second row since itdoes notadd up too 100% for CDL landuse:
+
+datalayers.pred<-datalayers.pred[-2,]
+
+# now run through correlation workflow:
+
+temp<-df.NWIS.TP_CQ%>%
+  rename(Name = site_no)%>%
+  filter(Name %in% datalayers.pred$Name)%>%
+  select(Name, sample_dt,result_va, X_00060_00003)%>%
+  left_join(., datalayers.pred, by = 'Name')%>%
+  mutate(log_C = log(result_va), log_Q = log(X_00060_00003), C = result_va, Q = X_00060_00003)%>%
+  filter(is.finite(log_C))%>%
+  filter(is.finite(log_Q))
+df.OLS<-temp%>%
+  group_by(Name)%>%
+  do({ OLS.co <- coef(lm(log_C ~ log_Q, .))
+  summarize(., OLS.I = OLS.co[1], 
+            OLS.S = OLS.co[2])
+  }) %>%
+  ungroup
+df.Sens<-temp%>%
+  group_by(Name)%>%
+  do({ Sens.co<-zyp.sen(log_C~log_Q,.)
+  summarize(., Sen.I = Sens.co$coefficients[[1]],
+            Sen.S= Sens.co$coefficients[[2]])
+  }) %>%
+  ungroup
+df.OLS_Sens<-left_join(df.OLS, df.Sens, by = 'Name')
+df.OLS_Sens<-left_join(df.OLS_Sens, datalayers.pred, by = 'Name')
+n_sites<-dim(df.OLS_Sens)[1] 
+df.cor <- df.OLS_Sens %>% 
+  # correlate() %>%
+  correlate(method = 'spearman') %>%
+  focus(c(OLS.I, OLS.S, Sen.I, Sen.S))%>%
+  pivot_longer(cols= c(2:5), names_to = 'CQ_Parameter', values_to = 'Spearman_Correlation')%>%
+  mutate(p_val = round(2*pt(-abs(Spearman_Correlation*sqrt((n_sites-2)/(1-(Spearman_Correlation)^2))), n_sites-2),2))%>%
+  mutate(sig_0.05 = ifelse(p_val <= 0.05, 'sig', 'not'))%>%
+  drop_na(p_val) # some standard deviaitons return NA because the watershed characteristic values are zero
+l.cor<-df.cor %>%
+  split(., df.cor$CQ_Parameter)%>%
+  lapply(., \(i) i%>%
+           # mutate(best = abs(Spearman_Correlation))%>%
+           # slice_max(order_by = best, n = 10)%>%
+           mutate(term = factor(term, levels = unique(term[order(Spearman_Correlation)])))%>%
+           mutate(sig_0.05 = factor(sig_0.05, levels = c('not', 'sig')))%>%
+           filter(!between(Spearman_Correlation, -0.25,.25))) # Order by correlation strength
+plist<-lapply(l.cor, \(i) i%>%ggplot(aes(x = term, y = Spearman_Correlation, color = sig_0.05)) +
+                geom_bar(stat = "identity") +
+                scale_color_manual(values = c("not" = "red", "sig" = "blue"),na.value = NA)+
+                facet_wrap('CQ_Parameter')+
+                ylab(paste('Spearman Correlation')) +
+                xlab("Watershed Attribute")+
+                theme(axis.text.x=element_text(angle=40,hjust=1))+
+                theme(legend.position="bottom"))
+p1<-ggpubr::ggarrange(plotlist = plist, ncol=2, nrow=2, common.legend = TRUE, legend="bottom")
+
+p1
+
+# multivariate plots:
+
+OLS<-l.cor[[1]]%>%arrange(desc(Spearman_Correlation))
+df.OLS_Sens%>%
+  pivot_longer(cols = c(6:last_col()), names_to = 'Type', values_to = 'Value')%>%
+  drop_na(Value)%>%
+  filter(Type %in% OLS$term)%>%
+  # mutate_if(is.numeric, ~replace(., . == 0, NA))%>%
+  ggplot(., aes(x = Value, y = !!sym(OLS$CQ_Parameter[1])))+
   geom_smooth(method = 'lm')+
-  facet_wrap('n_sample_rank')+
-  theme(
-    strip.background = element_blank(),
-    strip.text.x = element_blank()
-  )
-  
-# plot that shows slope and intercept on a map so any spatial correlation would show up?
+  geom_point()+
+  facet_wrap('Type', scales = 'free')
 
-# merge the lat longs for the sites to df.OLS:
+#
 
-df.OLS%>%
-  left_join(., df.NWIS.Predictors%>%select(Name, geometry), by = 'Name')%>%
-  st_as_sf(.)%>%
-  mapview(., zcol = 'OLS.S')
+####~~~~####
+
+# Now I want to see what the correlations would be if I 
+# combine the gauges 2 and data layers
 
 
 
@@ -1021,6 +1463,9 @@ df.OLS%>%
 
 
 
+#### NOTE:####
+
+# datalayers.pred contains the 60 sites for further analysis
 
 
 
@@ -1040,6 +1485,95 @@ df.OLS%>%
 
 
 #### Categorizing land use ####
+
+# USGS criteria:
+# Agricultural sites have >50% agricultural land and ≤5% urban land;
+# urban sites have >25% urban and ≤25% agricultural land; 
+# undeveloped sites have ≤ 5% urban and ≤ 25% agricultural land; 
+# all other combinations of urban, agricultural, and undeveloped lands are classified as mixed
+
+# combine Ag and Pasture into a single landuse for Ag:
+
+datalayers.pred<-mutate(datalayers.pred, Ag2 = Ag+Pasture)
+
+# set NA to zero
+
+datalayers.pred[is.na(datalayers.pred)]<-0
+
+# create the land use class column based on USGS critiera:
+# adjusted thresholds:
+
+datalayers.pred<-datalayers.pred%>%
+  mutate(USGS.LU.Adjusted = 'Mixed')%>%
+  mutate(USGS.LU.Adjusted = case_when(.default = 'Mixed',
+                                      Ag2 > .30 & Developed <= .1 ~ 'Agriculture',
+                                      Developed > .1 & Ag2 <= .3 ~ 'Urban',
+                                      Developed <= .1 & Ag2 <= .1 ~ 'Undeveloped'))
+
+# merge the OLS and Sens slopes and intercepts with this df:
+
+datalayers.pred<-left_join(datalayers.pred, df.OLS_Sens[,1:5], by = 'Name')
+
+# plot
+datalayers.pred%>%
+  pivot_longer(cols = 15:18, names_to = 'CQ_parameter', values_to = 'Value')%>%
+ggplot(., aes(x=USGS.LU.Adjusted, y=Value, color =USGS.LU.Adjusted ))+
+  geom_boxplot(varwidth = TRUE, alpha=0.2)+
+  # scale_x_discrete(labels=my_xlab)+
+  facet_wrap('CQ_parameter', scales = 'free')+
+  stat_compare_means(method = "anova", label.y = max(datalayers.pred$Value))+      # Add global p-value
+  stat_compare_means(label = "p.signif", method = "t.test",
+                     ref.group = "0.5") +
+  ggtitle('Adjusted USGS Thresholds using Aggregated Data Layers')
+
+#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### Categorizing land use (Not run) - experimenting with different data layers ####
 
 # USGS criteria:
 # Agricultural sites have >50% agricultural land and ≤5% urban land;
@@ -1162,67 +1696,13 @@ ggplot(data, aes(x=LU_source, y=Value, color =USGS.LU.Adjusted ))+
 
 
 
-
-
-
-
-##### Determine if CAFO is in watershed ####
-
-# read in CAFO locations and make sf dataframe
-
-CAFOs<-read.csv('Raw_data/Copy of CAFO-list-from-NYSDEC March 2021 with lat long values.csv')%>%
-  drop_na(longitude)%>%
-  drop_na(latitude)%>%
-  st_as_sf(., coords = c("longitude", "latitude"), crs = 4326)
-
-# add CAFOS to watershed map:
-
-mapview(df.sf.NWIS.keep)+
-  mapview(CAFOs, zcol = 'SIZE')
-
-# this file maps differently than the map on the DE website, but just going
-# to proceed with this file for now
-
-# determine how many CAFOs intersect each watershed:
-
-df.sf.NWIS.keep$CAFO_count <- lengths(st_intersects(df.sf.NWIS.keep, CAFOs))
-
-# make a map colored by CAFO count:
-
-mapview(df.sf.NWIS.keep, zcol = 'CAFO_count')
-
-# 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #### Grouping CQ curves (stationary, mobilization, dilutionary, complex) ####
 
 # create a list of dataframes for each sites CQ observations:
 
 temp<-df.NWIS.TP_CQ%>%
   rename(Name = site_no)%>%
-  filter(Name %in% df.sf.NWIS.keep$Name)%>%
+  filter(Name %in% datalayers.pred$Name)%>%
   mutate(log_C = log(result_va), log_Q = log(X_00060_00003), C = result_va, Q = X_00060_00003)%>%
   filter(is.finite(log_C))%>%
   filter(is.finite(log_Q))
@@ -1262,7 +1742,7 @@ df_Seg.2<-filter(df_Seg, site %in% temp$Name)%>%
 
 # make plot:
 
-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
+p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
   geom_point(aes(color = Type))+
   geom_smooth(method = 'lm')+
   geom_line(aes(x = Q, y = Seg_C), color = 'purple', size = 2)+
@@ -1286,7 +1766,7 @@ hc<-heat.colors(length(unique(df_Seg.2$slope_angle)), rev = T)
 
 # make plot:
 
-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
+p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
   geom_point(aes(color = Type))+
   scale_color_manual(name = "CQ Type", values = c("red", "blue", "green"))+
   geom_smooth(method = 'lm')+
@@ -1302,13 +1782,15 @@ ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
 
 # based on this plot, I would chose the following sites as complex:
 
-complex_sites<-unique(df_Seg.2$site)[c(3,18,24,25,26,34,35,42,43)]
+complex_sites<-unique(df_Seg.2$site)[c(3,16,21,23,29,30,39,47,53,54)] # 34 is the only up down which I orginally has as complex but we believe that itis being levergaged, so leaving it as mobilization
+
+# old complex site (when n=53): c(3,18,24,25,26,35,42,43)
 
 df_Seg.2<-mutate(df_Seg.2, Type = ifelse(site %in% complex_sites, 'Complex', Type))
 
 # make plot:
 
-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
+p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
   geom_point(aes(color = Type))+
   scale_color_manual(name = "CQ Type", values = c("purple", "red", "blue", "green"))+
   geom_smooth(method = 'lm')+
@@ -1322,35 +1804,33 @@ ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
 # I want to add land use as points color and OLS line with CQ type: to do this:
 # I also want to add number of CAFOs in watershed: to do this:
 
-# merge the plotting df with the land use for CDL 2020 and adjusted thresholds:
+# merge the plotting df with the land use for CDL 2020 and CAFO count and adjusted thresholds:
 
-df_Seg.2<-left_join(df_Seg.2, df.LU%>%filter(LU_source == 'CDL_2020')%>%select(Name, USGS.LU.Adjusted), by = c('site'='Name'))
+df_Seg.2<-left_join(df_Seg.2, datalayers.pred%>%select(Name, USGS.LU.Adjusted, CAFO_count), by = c('site'='Name'))
 
-# merge the plotting df with the CAFO count:
-
-df_Seg.2<-left_join(df_Seg.2, df.sf.NWIS.keep%>%select(Name, CAFO_count)%>%st_set_geometry(NULL), by = c('site'='Name'))
-
-# if CAF count is zero set to NA:
+# if CAFO count is zero set to NA:
 
 df_Seg.2$CAFO_count[df_Seg.2$CAFO_count==0]<-NA
 
-
 # plot:
 
-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
-  geom_point(aes(color = Type))+
+p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
+  geom_point(aes(color = Type), size = 1.5)+
   scale_color_manual(name = "CQ Type", values = c("purple", "red", "blue", "green"))+
   geom_smooth(method = 'lm')+
   geom_line(aes(x = Q, y = Seg_C), color = 'yellow', size = 1.5)+
-  geom_text(aes(x = -2.5, y = 0, label = CAFO_count), inherit.aes = FALSE)+
-  facet_wrap(dplyr::vars(n_sample_rank), scales = 'fixed')+
+  # geom_text(aes(x = 2, y = -2, label = CAFO_count), inherit.aes = FALSE, size = 30)+
+  facet_wrap(dplyr::vars(n_sample_rank), scales = 'free')+
   theme(
     strip.background = element_blank(),
     strip.text.x = element_blank()
   )+
   geom_rect(data = df_Seg.2%>%distinct(df_Seg.2$site, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, fill = USGS.LU.Adjusted), alpha = .15)+
   scale_fill_manual(name = "USGS Landuse\n(Adjusted)", values = c("red", "blue","purple", "green"))
-  
+
+p
+
+# save(p1, file = 'Processed_Data/p1.Rdata') 
   
 # add CQ type to the mapping df:
 
@@ -1367,6 +1847,17 @@ df.sf.NWIS.keep.2<-left_join(df.sf.NWIS.keep, distinct(df_Seg.2, site, .keep_all
 
 mapview(df.sf.NWIS.keep.2, zcol = 'Type', alpha.regions = 'NEW')
 
+# I want to make a plot of slopes and intercepts for each CQ type:
+
+m<-m%>%mutate(Type = ifelse(site_no %in% complex_sites, 'Complex', Type))%>%
+  left_join(., df.LU%>%filter(LU_source == 'CDL_2020')%>%select(Name, USGS.LU.Adjusted), by = c('site_no'='Name'))
+
+ggplot(m, aes(x=`(Intercept)`, y=log_Q, color = Type))+
+  geom_point(size = 2)+
+  scale_color_manual(name = "CQ Type", values = c("purple", "red", "blue", "green"))+
+  facet_wrap('USGS.LU.Adjusted', scales = 'fixed')
+  
+# I want to do this with more sites
 
 
 
@@ -1385,6 +1876,303 @@ mapview(df.sf.NWIS.keep.2, zcol = 'Type', alpha.regions = 'NEW')
 
 
 
+
+
+
+
+
+#### Land Use changes across watersheds ####
+
+# Look at changes in NLCD and CDL calculated Ag %land between 2008-2020 for each 53 watershed
+# to do this:
+
+# pivot longerto getthe land use catgories in a single column:
+
+df.LU.2<-pivot_longer(df.LU, cols = 6:12, names_to = 'LandUse', values_to = 'values')
+
+# pivot wider to get the land use source (data layers) in their own columns:
+
+df.LU.2<-pivot_wider(df.LU.2, names_from = 'LU_source', values_from = 'values')
+
+# pivot longer to put CDL and NLCD in own columns:
+
+df.LU.CDL<-pivot_longer(df.LU.2, cols = starts_with('CDL'), names_to = 'CDL', values_to = 'CDL_values')
+df.LU.NLCD<-pivot_longer(df.LU.2, cols = starts_with('NLCD'), names_to = 'NLCD', values_to = 'NLCD_values')
+
+# group by land use and calculate the difference between the years:
+
+df.LU.2<-df.LU.2%>%mutate(CDL_diff = abs(round(CDL_2020-CDL_2008,2)),NLCD_diff = abs(round(NLCD_2019-NLCD_2001,2)))%>%
+  arrange(desc(CDL_diff))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### Seasonal ANanlysis ####
+
+# is the CQ relaitonship different between seasons at these sites?
+
+# I need to filter down to sites with over 100 samples for this, 20 samples isnt going tocut it:
+
+df_Seg.3<-filter(df_Seg.2, n>100)
+
+# add season column:
+
+df_Seg.3$Season<-getSeason(df_Seg.3$Date)
+
+# plot:
+
+p1<-ggplot(df_Seg.3, aes(x = log(Q_real), y = log(C)))+
+  geom_point(aes(color = Season), size = 4)+
+  # scale_color_manual(name = "CQ Type", values = c("purple", "red", "blue", "green"))+
+  geom_smooth(method = 'lm')+
+  geom_line(aes(x = Q, y = Seg_C), color = 'yellow', size = 1.5)+
+  # geom_text(aes(x = 2, y = -2, label = CAFO_count), inherit.aes = FALSE, size = 30)+
+  facet_wrap(dplyr::vars(n_sample_rank), scales = 'free', ncol = 4)+
+  theme(
+    strip.background = element_blank(),
+    strip.text.x = element_blank(),
+    legend.position = "bottom",
+    legend.title=element_text(size=14)
+  )+
+  geom_rect(data = df_Seg.3%>%distinct(df_Seg.3$site, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, fill = Type), alpha = .15)+
+  scale_fill_manual(name = "CQ Type", values = c("red", "blue","purple", "green"))
+
+p1
+
+# save(p1, file = 'Processed_Data/p1.Rdata') 
+
+# 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### Q Exceddnce Proability ####
+
+# subset the daily flows to the 53 sites:
+
+temp<-filter(df.NWIS.Q, site_no %in% df.sf.NWIS.keep.2$Name)
+
+# split into lists by site:
+
+temp<-split(temp, f = temp$site_no) 
+
+# sort each dataframe in the list by the flow, add a column for m and n, convert back to a dataframe using bind_rows, and select only the needed columns for the left join (next step):
+
+temp<-bind_rows(lapply(temp, \(i) i[order(i$X_00060_00003,decreasing = T),]%>%mutate(m = 1:n(), n = n())))%>%select(site_no, Date, m, n)
+
+# append the value of M and n for each C-Q observation in the C-Q dataframe:
+# need to rename the n column in the left dataframe as well:
+
+df_Seg.2<-left_join(df_Seg.2%>%rename(n_samples = n), temp, by = c("site" = "site_no", "Date" = "Date"))
+
+# calcualte the exceednce proability for Q for each C observation:
+
+df_Seg.2$EP<-round(df_Seg.2$m/(df_Seg.2$n+1), 4)
+
+# plot:
+
+p1<-ggplot(df_Seg.2, aes(x = EP, y = log(C)))+
+  geom_point(aes(color = Type))+
+  scale_color_manual(name = "Log-Log\nCQ Type", values = c("purple", "red", "blue", "green"))+
+  geom_smooth(method = 'lm')+
+  # geom_line(aes(x = Q, y = Seg_C), color = 'yellow', size = 1.5)+
+  geom_text(aes(x = .5, y =-2, label = CAFO_count), inherit.aes = FALSE, size=15)+
+  facet_wrap(dplyr::vars(n_sample_rank), scales = 'free', ncol = 4)+
+  theme(
+    strip.background = element_blank(),
+    strip.text.x = element_blank()
+  )+
+  geom_rect(data = df_Seg.2%>%distinct(df_Seg.2$site, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, fill = USGS.LU.Adjusted), alpha = .15)+
+  scale_fill_manual(name = "USGS Landuse\n(Adjusted)", values = c("red", "blue","purple", "green"))
+
+save(p1, file = 'Processed_Data/p1.Rdata')
+
+# I want to rerun the BP analysis using EPL:
+
+l_Seg.EP<-list()
+davies.test.matrix.EP<-NULL
+EP<-df_Seg.2
+temp.loop<-sort(unique(EP$site))
+
+i<-1
+
+for (i in seq_along(temp.loop)){
+  
+  tryCatch({
+    
+    # print the site name for loop debugging:
+    
+    print(i)
+    print(temp.loop[i])
+    
+    # create a dataframe that will work with segmented. To do this: 
+    # filter for the site the loop is in
+    # add log transformed C and Q columns, as well as duplicated columns for renamed C and Q
+    # filter for real log C and Q values so breakpoint analysis works smoothly:
+    
+    df<-EP%>%
+      filter(site == temp.loop[i])%>%
+      mutate(log_C = log(C))%>%
+      filter(is.finite(log_C))%>%
+      filter(is.finite(EP))
+    
+    # build a single slope lm for log C and Q. Tis model is also used inthe breakpoint analysis inthenext step:
+    
+    m<-lm(log_C~EP, df)
+    
+    # perform breakpoint regression:
+    
+    m_seg<-segmented(obj = m, npsi = 1)
+    
+    # perform davies test for constant linear predictor:
+    # the results are saved as a string with the the site name and true/false:
+    
+    x<-paste(temp.loop[i], '-', davies.test(m)$p.val<0.05)
+    
+    # add the results of davies test to the matrix made prior to this for loop:
+    
+    davies.test.matrix.EP<-c(davies.test.matrix.EP,x)
+    
+    # save the breakpoints
+    
+    bp<-m_seg$psi[1]
+    
+    # save the slopes: To do this:
+    # a conditional statement is needed since sometimes the segmented function wont fit a two slope model at all and will return a object that doesnt work with the slope function used here:
+    
+    if(length(class(m_seg))==2){
+      s<-as.data.frame(slope(m_seg))
+    } else{
+      s<-NA
+    }
+    
+    # get the intercepts (again conditional statement is needed):
+    
+    if(length(class(m_seg))==2){
+      inter<-as.data.frame(intercept(m_seg))
+    } else{
+      inter<-NA
+    }
+    
+    
+    # get the model fitted data, put in a dataframe, and reformat this dataframe to export out of the loop
+    
+    if(length(class(m_seg))==2){
+      fit <- data.frame(site = df$site, Date = df$Date, Seg_C_EP = fitted(m_seg), I1_EP = inter$Est.[1], I2_EP = inter$Est.[2], Slope1_EP = s[1,1], Slope2_EP = s[2,1], BP_EP = bp)
+      result_df<-left_join(df, fit, by = c('site', 'Date'))
+    } else{
+      fit <- data.frame(site = df$site, Date = df$Date, Seg_C_EP = fitted(m_seg), I1_EP = inter$Est.[1], I2_EP = NA, Slope1_EP = NA, Slope2_EP = NA, BP_EP = NA)
+      result_df<-left_join(df, fit, by = c('site', 'Date'))
+    }
+    
+    l_Seg.EP[[i]]<-result_df
+    
+  }, 
+  
+  error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+  
+}
+
+# Looking at the davies test results:
+
+davies.test.matrix.EP
+
+# transform this matrix into a two column dataframe for use later with df_Seg and plotting. To do this:
+# separate the matrix into two columns
+# use mutate to remove white space around these character columns:
+
+df.davies.EP<-as.data.frame(davies.test.matrix.EP)%>%
+  separate_wider_delim(1, "-", names = c("site", "BP_EP_yes"))%>%
+  mutate(across(c(1,2), trimws))
+
+# now combine the list of dfs of the breakpoint analysis results (with fitted values, intercepts and slopes) into a single df:
+
+df_Seg.EP<-bind_rows(l_Seg.EP)
+
+# merge this dataframe with the davies test result dfs to add the BP_yes column, use replace and the BP yes column with a conditional statement to set the breakpoint Q and C column rows to NA, as to not plot the segmeneted line if davies test was false:
+
+df_Seg.EP<-df_Seg.EP%>%
+  left_join(., df.davies.EP, by = 'site')%>%
+  mutate(across(c(1,2), ~replace(., BP_EP_yes == 'FALSE', NA)))
+
+
+
+# ready to plot:
+
+p<-ggplot(df_Seg, aes(x = log(Q_real), y = log(C)))+
+  geom_point()+
+  geom_smooth(method = 'lm')+
+  geom_line(aes(x = Q, y = Seg_C), color = 'tomato')+
+  facet_wrap(dplyr::vars(n_sample_rank), scales = 'free')+
+  theme(
+    strip.background = element_blank(),
+    strip.text.x = element_blank()
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#
 
 
 
@@ -1405,7 +2193,7 @@ mapview(df.sf.NWIS.keep.2, zcol = 'Type', alpha.regions = 'NEW')
 
 # finally save image to workspace:
 
-# save.image(file = 'Processed_Data/NWIS.Rdata')
+# save.image(file = 'Processed_Data/NWIS_TEMP.Rdata')
 
 load('Processed_Data/NWIS.Rdata')
 

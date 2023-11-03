@@ -222,9 +222,9 @@ st_snap_points = function(x, y, max_dist = 1000) {
 
 # test variables for function building:
 
-parameter_code<-'00665' # pcode for TP
-# 
-df.flow_query<-df.NWIS.Q_sites
+# parameter_code<-'00665' # pcode for TP
+
+# df.flow_query<-df.NWIS.Q_sites
 
 fun.df.Pair_consit_flow<-function(parameter_code, df.flow_query, n_samples = 20, state = 'VT') {
   

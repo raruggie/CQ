@@ -6,6 +6,7 @@ OLS<-l.cor[[1]]%>%arrange(desc(Spearman_Correlation))%>%
   filter(Spearman_Correlation<0)
 Sen<-l.cor[[3]]%>%arrange(desc(Spearman_Correlation))%>%
   filter(Spearman_Correlation<0)
+intersect(OLS$term, Sen$term)
 setdiff(OLS$term, Sen$term)
 setdiff(Sen$term,OLS$term)
 
@@ -15,6 +16,7 @@ OLS<-l.cor[[1]]%>%arrange(desc(Spearman_Correlation))%>%
   filter(Spearman_Correlation>0)
 Sen<-l.cor[[3]]%>%arrange(desc(Spearman_Correlation))%>%
   filter(Spearman_Correlation>0)
+intersect(OLS$term, Sen$term)
 setdiff(OLS$term, Sen$term)
 setdiff(Sen$term,OLS$term)
 

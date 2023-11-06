@@ -1285,7 +1285,6 @@ df.G2<-select(df.G2, STAID | where(is.numeric))
 df.G2<-df.G2%>%filter(STAID %in% df.datalayers$Name)
   
 # there are only 40 sites
-  
 
 
 
@@ -1458,6 +1457,31 @@ df.G2<-df.G2%>%filter(STAID %in% df.datalayers$Name)
 #### Using gauges2 sites ####
 #####################################################
 
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~##
+#### !! Editing Gauges 2 attributes !! ####
+
+# save gauges2 df so dont need to rerun l.G2:
+
+# df.G2.placeholder<-df.G2
+
+# df.G2<-df.G2.placeholder
+
+# second pass: The follow predictors have weird univariate plots,
+# so removing them:
+
+df.G2<-df.G2%>%select(-c(CONTACT, MAINS100_43, NUTR_BAS_PCT, POWER_SUM_MW, RIP100_90, RIP800_90, WOODYWETNLCD06, RAW_DIS_NEAREST_DAM))
+
+# third pass: just because I am currious I want to remove the attributes 
+# for main stem and riprian:
+
+# df.G2<-df.G2%>%select(-starts_with('MAINS'))%>%select(-starts_with('RIP'))
+
+# third pass not ideal
+
+#### !! Editing Gauges 2 attributes !! ####
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~##
+
+
 # combined the predictors df with the cq data:
 
 temp<-df.NWIS.TP_CQ%>%
@@ -1545,7 +1569,7 @@ p1<-ggpubr::ggarrange(plotlist = plist, ncol=2, nrow=2, common.legend = TRUE, le
 
 p1<-annotate_figure(p1, top = text_grob("Gauges 2", 
                                       color = "red", face = "bold", size = 14))
-
+# plot:
 
 p1
 
@@ -1647,6 +1671,16 @@ sort(rowSums(df.datalayers[,-c(1, 9:12)], na.rm = T))
 
 # looks good
 
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~##
+#### !! Editing data layers sites !! ####
+
+# I want to try removing sites with over 20% developed:
+
+# df.datalayers<-filter(df.datalayers, Developed <.2)
+
+##~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~##
+
+
 # now run through correlation workflow:
 
 temp<-df.NWIS.TP_CQ%>%
@@ -1682,18 +1716,6 @@ df.cor <- df.OLS_Sens %>%
   mutate(p_val = round(2*pt(-abs(Spearman_Correlation*sqrt((n_sites-2)/(1-(Spearman_Correlation)^2))), n_sites-2),2))%>%
   mutate(sig_0.05 = ifelse(p_val <= 0.05, 'sig', 'not'))%>%
   drop_na(p_val) # some standard deviaitons return NA because the watershed characteristic values are zero
-
-#############################################################
-# l.cor<-df.cor %>%
-#   split(., df.cor$CQ_Parameter)%>%
-#   lapply(., \(i) i%>%
-#            # mutate(best = abs(Spearman_Correlation))%>%
-#            # slice_max(order_by = best, n = 10)%>%
-#            mutate(term = factor(term, levels = unique(term[order(Spearman_Correlation)])))%>%
-#            mutate(sig_0.05 = factor(sig_0.05, levels = c('not', 'sig')))%>%
-#            filter(!between(Spearman_Correlation, -0.25,.25))) # Order by correlation strength
-#############################################################
-
 l.cor<-df.cor %>%
   split(., df.cor$CQ_Parameter)%>%
   lapply(., \(i) i%>% 
@@ -1736,6 +1758,36 @@ df.OLS_Sens%>%
   ggtitle(paste('Data Layers:', OLS$CQ_Parameter[1]))
 
 #
+number<-4
+
+make_plot<-function(number){
+  
+  OLS<-l.cor[[number]]%>%arrange(desc(Spearman_Correlation))
+  
+  x<-df.OLS_Sens%>%
+    pivot_longer(cols = c(6:last_col()), names_to = 'Type', values_to = 'Value')%>%
+    drop_na(Value)%>%
+    select(c(Name, OLS$CQ_Parameter[1],Type, Value))%>%
+    filter(Type %in% OLS$term)%>%
+    # mutate_if(is.numeric, ~replace(., . == 0, NA))%>%
+    left_join(., OLS%>%select(term, Spearman_Correlation), by = c('Type'='term'))%>%
+    mutate(Type = factor(Type, levels=unique(Type[order(-Spearman_Correlation,Type)]), ordered=TRUE))
+  
+  ggplot(x, aes(x = Value, y = !!sym(OLS$CQ_Parameter[1])))+
+    geom_smooth(method = 'lm')+
+    geom_point()+
+    facet_wrap('Type', scales = 'free')+
+    ggtitle(paste('Data Layers:', OLS$CQ_Parameter[1]))
+}
+
+
+lapply(c(1:4), \(i) make_plot(i))
+
+# interestingly from these univariate plots,
+# it looks like if I removed sites with over 20% developed
+# that would be an insane predictor of intercepts:
+
+# I tried this and it didnt work. (It also reduced the number of sites)
 
 
 

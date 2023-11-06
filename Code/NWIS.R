@@ -1665,7 +1665,11 @@ df.datalayers<-left_join(df.NWIS.NLCD.2001,df.NWIS.DEM, by = 'Name')%>%
   left_join(., df.sf.NWIS.keep%>%select(Name, CAFO_count), by = 'Name')%>%
   select(-geometry)
 
-# make sure land use adds upto 100%:
+# set NA to zero:
+
+df.datalayers[is.na(df.datalayers)]<-0
+
+# make sure land use adds up to 100%:
 
 sort(rowSums(df.datalayers[,-c(1, 9:12)], na.rm = T))
 
@@ -1860,17 +1864,6 @@ df.cor <- df.OLS_Sens %>%
   mutate(p_val = round(2*pt(-abs(Spearman_Correlation*sqrt((n_sites-2)/(1-(Spearman_Correlation)^2))), n_sites-2),2))%>%
   mutate(sig_0.05 = ifelse(p_val <= 0.05, 'sig', 'not'))%>%
   drop_na(p_val) # some standard deviaitons return NA because the watershed characteristic values are zero
-#############################################################
-# l.cor<-df.cor %>%
-#   split(., df.cor$CQ_Parameter)%>%
-#   lapply(., \(i) i%>%
-#            mutate(best = abs(Spearman_Correlation))%>%
-#            slice_max(order_by = best, n = 15)%>%
-#            mutate(sig_0.05 = factor(sig_0.05, levels = c('not', 'sig')))%>%
-#            mutate(term = factor(term, levels = unique(term[order(Spearman_Correlation)])))%>%
-#            filter(!between(Spearman_Correlation, -0.25,.25))) # Order by correlation strength
-#############################################################
-
 l.cor<-df.cor %>%
   split(., df.cor$CQ_Parameter)%>%
   lapply(., \(i) i%>% 
@@ -1922,6 +1915,118 @@ df.OLS_Sens%>%
   ggtitle(paste('Gauges 2 and Data Layers:', OLS$CQ_Parameter[1]))
 
 #
+
+number<-3
+
+make_plot<-function(number){
+  
+  OLS<-l.cor[[number]]%>%arrange(desc(Spearman_Correlation))
+  
+  x<-df.OLS_Sens%>%
+    pivot_longer(cols = c(6:last_col()), names_to = 'Type', values_to = 'Value')%>%
+    drop_na(Value)%>%
+    select(c(Name, OLS$CQ_Parameter[1],Type, Value))%>%
+    filter(Type %in% OLS$term)%>%
+    # mutate_if(is.numeric, ~replace(., . == 0, NA))%>%
+    left_join(., OLS%>%select(term, Spearman_Correlation), by = c('Type'='term'))%>%
+    mutate(Type = factor(Type, levels=unique(Type[order(-Spearman_Correlation,Type)]), ordered=TRUE))
+  
+  ggplot(x, aes(x = Value, y = !!sym(OLS$CQ_Parameter[1])))+
+    geom_smooth(method = 'lm')+
+    geom_point()+
+    facet_wrap('Type', scales = 'free')+
+    ggtitle(paste('Gauges 2 (edited) + Data Layers:', OLS$CQ_Parameter[1]))
+}
+
+lapply(c(1:4), \(i) make_plot(i))
+
+#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#######################
+ ####~~~~ MLR ~~~~####
+#######################
+
+# create the l..cor list as above but now only filter out the 
+# non-significant attributes:
+
+l.cor.MLR<-df.cor %>%
+  split(., df.cor$CQ_Parameter)%>%
+  lapply(., \(i) i%>% 
+           arrange(Spearman_Correlation)%>%  
+           slice_head(n = 7)%>%
+           bind_rows(i%>%arrange(desc(Spearman_Correlation))%>%slice_head(n = 7))%>%
+           distinct(term, .keep_all = T)%>%
+           filter(!between(Spearman_Correlation, -0.25,.25))%>%
+           mutate(sig_0.05 = factor(sig_0.05, levels = c('not', 'sig')))%>%
+           filter(sig_0.05 == 'sig')%>%
+           mutate(term = factor(term, levels = unique(term[order(Spearman_Correlation)])))) # Order by correlation strength
+
+# create a list of dataframes from ____ and subseting the attributes using the 
+# names in each l.cor[[i]]$term:
+
+l.cor.MLR.full<-lapply(1:4, \(i) df.OLS_Sens%>%
+                    select(i+1, l.cor.MLR[[i]]$term)%>%
+                    as.data.frame()%>%
+                      rename(term = 1))
+
+x<-l.cor.MLR.full[[1]]
+
+# create a list of lm objects from eachdataframe:
+
+l.cor.MLR.m<-lapply(l.cor.MLR.full, \(i) lm(term~., i))
+
+x<-l.cor.MLR.m[[1]]
+
+summary(x)
+
+names(l.cor.MLR.m)<-names(df.OLS_Sens)[2:5]
+
+# create a list of stepAIC:
+
+library(MASS)
+library(car)
+
+l.cor.AIC<-lapply(l.cor.MLR.m, \(i) stepAIC(i, direction = 'both'))
+
+
+i<-1
+x<-stepAIC(l.cor.MLR.m[[i]])
+
+#
+
+summary()
+
+
+
 
 
 

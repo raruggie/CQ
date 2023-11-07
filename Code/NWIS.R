@@ -5,6 +5,9 @@ gc()
 
 ####################### Load packages #######################
 
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
 library(climateR)
 library(ggpubr)
 library(ggnewscale)
@@ -1973,16 +1976,17 @@ lapply(c(1:4), \(i) make_plot(i))
 
 
 
-#######################
- ####~~~~ MLR ~~~~####
-#######################
+############################################################################
+                     ####~~~~ MLR ~~~~####
+############################################################################
+
+# set up list of dataframes for different selection methods used below:
 
 save(df.cor, df.OLS_Sens, file = 'Processed_Data/troubleshoot_AIC.Rdata')
+load('Processed_Data/troubleshoot_AIC.Rdata')
 
 # create the l..cor list as above but now only filter out the 
 # non-significant attributes:
-
-load('Processed_Data/troubleshoot_AIC.Rdata')
 
 l.cor.MLR<-df.cor %>%
   split(., df.cor$CQ_Parameter)%>%
@@ -2010,6 +2014,8 @@ l.cor.MLR.full<-lapply(1:4, \(i) df.OLS_Sens%>%
 
 x<-l.cor.MLR.full[[1]]
 
+####~~~~ Step AIC ~~~~####
+
 # loop through data frames and make lm and stepAIC objects (wont work on lapply for some reason):
 
 # set up list for aic objects to append into:
@@ -2018,7 +2024,7 @@ l.aic<-list()
 
 # loop:
 
-i<-1
+i<-2
 
 for (i in 1:4){
   
@@ -2041,7 +2047,9 @@ for (i in 1:4){
   # create AIC object:
   
   aic<-stepAIC(m.simple, scope = list(upper=m.full, lower =~1), direction = 'both', trace = FALSE)
-
+  
+  summary(aic)
+  
   # save aic object to list:
   
   l.aic[[i]]<-aic
@@ -2049,6 +2057,8 @@ for (i in 1:4){
 }
 
 # look at summary of aic objects:
+
+tab_model(l.aic)
 
 lapply(l.aic, summary)
 
@@ -2082,12 +2092,44 @@ l.MLR.plots<-lapply(1:4, \(i) df.OLS_Sens%>%
 
 l.MLR.plots
 
+# build MLR models:
+
+# just uing the top 4 predictors for each parameter: to do this:
+
+# create a list of the dataframes of the top 4 for each paramerter: 
+
+l.lm.MLR_top4<-lapply(1:4, \(i) df.OLS_Sens%>%
+                         select(i+1, l[[i]])%>%
+                         as.data.frame()%>%
+                         # rename(term = 1)%>%
+                select(1:5))
+
+x<-l.lm.MLR_top4[[1]]
+
+# set names of list:
+
+names(l.lm.MLR_top4)<-names(df.OLS_Sens)[2:5]
+
+# create avector of the formulas for each parameter:
+
+v.formulas<-sapply(l.lm.MLR_top4, \(i) paste(names(i)[1], '~', paste(names(i)[2:5], collapse="+")))
+
+# loop through the list and the vector of forumlas to build lm models:
+    
+l.lm.MLR_top4<-lapply(seq_along(l.lm.MLR_top4), \(i) lm(v.formulas[i], data = l.lm.MLR_top4[[i]]))
+
+# plot residual and qq plots for each parameter:
+
+par(mfrow = c(2, 4))
+
+lapply(seq_along(l.lm.MLR_top4), \(i) plot(l.lm.MLR_top4[[i]], main = names(l.lm.MLR_top4)[i], which=c(2,1)))
+
+# summarytable of the 4 models:
+
+tab_model(l.lm.MLR_top4, dv.labels = names(df.OLS_Sens)[2:5])
+
+
 #
-
-
-
-
-
 
 
 

@@ -5,6 +5,7 @@ gc()
 
 ####################### Load packages #######################
 
+library(ggcorrplot)
 library(sjPlot)
 library(sjmisc)
 library(sjlabelled)
@@ -2002,7 +2003,9 @@ l.cor.MLR<-df.cor %>%
            as.data.frame())
 
 
-x<-l.cor.MLR[[1]]
+x<-l.cor.MLR[[4]]
+
+View(x)
 
 # create a list of dataframes from df.OLS.Sens and subseting the attributes using the 
 # names in each l.cor[[i]]$term for simple and full models:
@@ -2012,46 +2015,245 @@ l.cor.MLR.full<-lapply(1:4, \(i) df.OLS_Sens%>%
                     as.data.frame()%>%
                       rename(term = 1))
 
-x<-l.cor.MLR.full[[1]]
+x<-l.cor.MLR.full[[4]]
 
-####~~~~ Step AIC ~~~~####
+# Feature Selection:
 
-# loop through data frames and make lm and stepAIC objects (wont work on lapply for some reason):
+# loop through data frames to determine best features using different methods:
 
-# set up list for aic objects to append into:
+
 
 l.aic<-list()
 
 # loop:
 
-i<-2
+i<-1
 
 for (i in 1:4){
   
-  # find the best predictor name for the simple model:
+  # regardless of the method to pick the predictors for the MLR model, no more than 4 wil be included as per the run p < n/10
   
-  n<-l.cor.MLR[[i]]$term[which.max(abs(l.cor.MLR[[i]]$Spearman_Correlation))]
+  # Spearman correlations:
+  # build a lm using the top 4 correlates from the spearman correlaiton analysis:
+  
+  data.temp<-l.cor.MLR.full[[i]][,1:5]
+  m.spear<-lm(term~., data = data.temp)
+  
+  summary(m.spear)
+  
+  plot(m.spear)
+  
+  # Random Forest:
+  
+  set.seed(1)
+  
+  x<-randomForest(term~., data = l.cor.MLR.full[[i]], na.action=na.omit)
+  
+  y<-tibble::rownames_to_column(as.data.frame(x$importance), "Attribute")%>%
+    arrange(desc(IncNodePurity))
+  
+  data.temp<-l.cor.MLR.full[[i]]%>%select(term, y$Attribute[1:4])
+  m.rf<-lm(term~., data = data.temp)
+  
+  summary(m.spear)
+  
+  plot(m.spear)
+  
+  # stepAIC:
+  
+  # v1: full model:
+  
+  # build a model using stepAIC chosen predictors:
+  
+  # find the best predictor name for the CQ parameter for use in the simple model:
+  
+  # n<-l.cor.MLR[[i]]$term[which.max(abs(l.cor.MLR[[i]]$Spearman_Correlation))]
+  
+  # stepAIC workflow:
+  
+  fit0 <- lm(term~1,data=l.cor.MLR.full[[i]])
+  up.model <- paste("~", paste(colnames(l.cor.MLR.full[[i]][,-1]), collapse=" + "))
+  fit.both <- stepAIC(fit0,
+                    direction="both",
+                    scope=
+                      list(lower=fit0,
+                           upper=up.model)
+                    ,
+                    trace = FALSE
+  )
+  
+  summary(fit.both)
+  
+  # v2: reduce predictor set prior to building full model:
+  
+  # v2.1: check which predictors have the highest coefficent of variability among the 40 observations:
+  
+  v.mean<-sapply(l.cor.MLR.full[[i]][,-1], mean, na.rm=T)
+  v.sd<-sapply(l.cor.MLR.full[[i]][,-1], sd, na.rm=T)
+  
+  v.cv<-v.mean/v.sd
+  
+  df.cv<-tibble::rownames_to_column(as.data.frame(v.cv), "Attribute")%>%
+    rename(var=2)%>%
+    arrange(desc(var))
+  
+  # build the full model using the top n-1:
+  
+  up.model <- paste("~", paste(colnames(l.cor.MLR.full[[i]]%>%select(df.cv$Attribute[1:39])), collapse=" + "))
+  fit.both <- stepAIC(fit0,
+                      direction="both",
+                      scope=
+                        list(lower=fit0,
+                             upper=up.model)
+                      ,
+                      trace = T
+  )
+  
+  summary(fit.both)
+  
+  # v2.2: check which predictors have the highest ariability among the 40 observations:
+  
+  v.var<-sapply(l.cor.MLR.full[[i]][,-1], var, na.rm=T)
+  
+  df.var<-tibble::rownames_to_column(as.data.frame(v.var), "Attribute")%>%
+    rename(var=2)%>%
+    arrange(desc(var))
+  
+  # build the full model using the top n-1:
+  
+  up.model <- paste("~", paste(colnames(l.cor.MLR.full[[i]]%>%select(df.var$Attribute[1:39])), collapse=" + "))
+  fit.both <- stepAIC(fit0,
+                      direction="both",
+                      scope=
+                        list(lower=fit0,
+                             upper=up.model)
+                      ,
+                      trace = T
+  )
+  
+  summary(fit.both)
+  
+  # leaps: (doesnt run, too big)
+  
+  fit.reg<-leaps::regsubsets(term~.,data=l.cor.MLR.full[[i]],nbest=4, really.big=T)
+  
+  # lasso: (both lassos dont work)
+  
+  #Define predictor and response variables
+  y <- l.cor.MLR.full[[i]]$term
+  x <- data.matrix(l.cor.MLR.full[[i]][, -1])
+  
+  #fit lasso regression model using k-fold cross-validation
+  cv_model <- cv.glmnet(x, y, alpha = 1)
+  best_lambda <- cv_model$lambda.min
+  
+  #display optimal lambda value
+  best_lambda
+  
+  #view plot of test MSE's vs. lambda values
+  plot(cv_model)
+  
+  #view coefficients of best model
+  best_model <- glmnet(x, y, alpha = 1, lambda = best_lambda)
+  coef(best_model)
+  
+  # lasso v2:
+  
+  ytrain <- l.cor.MLR.full[[i]]$term
+  xtrain <- data.matrix(l.cor.MLR.full[[i]][, -1])
+  
+  fit.lasso.glmnet <-glmnet(x=xtrain,y=ytrain,alpha=1) 
+  
+  cv.lasso.glmnet <-cv.glmnet(x=xtrain,y=ytrain,alpha=1) 
+  plot(cv.lasso.glmnet)
+  
+  beta.lasso <- coef(fit.lasso.glmnet, s = cv.lasso.glmnet$lambda.min)
+  names(beta.lasso) <- colnames(xtrain)
+  beta.lasso
+  
+  Shat <- rownames(beta.lasso)[which(beta.lasso != 0)]
+  Shat
+
+  #################################################
+  # Correlations:
+  #################################################
+
+  # calculate correlation matrix
+  correlationMatrix <- cor(l.cor.MLR.full[[i]][,-1])
+  # summarize the correlation matrix
+  print(correlationMatrix)
+  ggcorrplot(correlationMatrix)
+  # find attributes that are highly corrected (ideally >0.75)
+  highlyCorrelated <- findCorrelation(correlationMatrix, cutoff=0.75)
+  # print indexes of highly correlated attributes
+  print(highlyCorrelated)
+  
+  #################################################
+  # Feature Importance
+  #################################################
+  
+  control <- trainControl(method="repeatedcv", number=10, repeats=3)
+  # train the model
+  model <- train(term~., data=l.cor.MLR.full[[i]], method="leapSeq", preProcess="scale", trControl=control)
+  # estimate variable importance
+  importance <- varImp(model, scale=FALSE)
+  # summarize importance
+  print(importance)
+  # plot importance
+  plot(importance)
+  
+  # build a lm with the most important features:
+  
+  x<-tibble::rownames_to_column(importance$importance, "Attribute")%>%
+    arrange(desc(Overall))
+  
+  data.temp<-l.cor.MLR.full[[i]]%>%select(term, x$Attribute[1:4])
+  
+  m.fi<-lm(term~., data = data.temp)
+  
+  summary(m.fi)
+  
+  plot(m.fi)
+  
+  #################################################
+  # Feature Selection:
+  #################################################
+  
+  # define the control using a random forest selection function
+  control <- rfeControl(functions=rfFuncs, method="cv", number=10)
+  # run the RFE algorithm
+  results <- rfe(l.cor.MLR.full[[i]][,-1], l.cor.MLR.full[[i]][,1], sizes=c(1:4), rfeControl=control)
+  # summarize the results
+  print(results)
+  # list the chosen features
+  predictors(results)
+  # plot the results
+  plot(results, type=c("g", "o"))
+  
+  
+  
+  
   
   # createformula with this predictor:
-  
+
   n<-paste('term ~', n)
-  
+
   # create simple model:
-  
+
   m.simple<-lm(n,l.cor.MLR.full[[i]])
-  
+
   # create full model:
-  
+
   m.full<-lm(term~., l.cor.MLR.full[[i]])
-  
+
   # create AIC object:
-  
+
   aic<-stepAIC(m.simple, scope = list(upper=m.full, lower =~1), direction = 'both', trace = FALSE)
-  
+
   summary(aic)
-  
+
   # save aic object to list:
-  
+
   l.aic[[i]]<-aic
   
 }

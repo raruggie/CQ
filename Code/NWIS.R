@@ -5,6 +5,11 @@ gc()
 
 ####################### Load packages #######################
 
+library(FactoMineR)
+library(factoextra)
+library(leaps)
+library(glmnet)
+library(randomForest)
 library(ggcorrplot)
 library(sjPlot)
 library(sjmisc)
@@ -2017,13 +2022,13 @@ l.cor.MLR.full<-lapply(1:4, \(i) df.OLS_Sens%>%
 
 x<-l.cor.MLR.full[[4]]
 
-# Feature Selection:
+# create another list but keep the site names for use at end of loop:
 
-# loop through data frames to determine best features using different methods:
+l.cor.MLR.full.w_name<-lapply(1:4, \(i) df.OLS_Sens%>%
+                         select(1, i+1, l.cor.MLR[[i]]$term)%>%
+                         as.data.frame())
 
-
-
-l.aic<-list()
+x<-l.cor.MLR.full.w_name[[4]]
 
 # loop:
 
@@ -2033,146 +2038,163 @@ for (i in 1:4){
   
   # regardless of the method to pick the predictors for the MLR model, no more than 4 wil be included as per the run p < n/10
   
-  # Spearman correlations:
+  #################################################
+  # Spearman correlations::
+  #################################################
+
   # build a lm using the top 4 correlates from the spearman correlaiton analysis:
   
   data.temp<-l.cor.MLR.full[[i]][,1:5]
   m.spear<-lm(term~., data = data.temp)
   
-  summary(m.spear)
+  summary(m.spear) # Adj R2 = 0.2074, pval = 0.0156
   
-  plot(m.spear)
+  plot(m.spear) # 21, 37,23
   
-  # Random Forest:
+  #################################################
+  # Random Forest: 
+  # changes everytime slightly even if seed is same, 
+  # I think this is called unstable
+  #################################################
   
   set.seed(1)
   
+  # build RF model:
   x<-randomForest(term~., data = l.cor.MLR.full[[i]], na.action=na.omit)
-  
+  # arrange by RF variable importance 
   y<-tibble::rownames_to_column(as.data.frame(x$importance), "Attribute")%>%
     arrange(desc(IncNodePurity))
-  
+  # build lm of top 4:
   data.temp<-l.cor.MLR.full[[i]]%>%select(term, y$Attribute[1:4])
   m.rf<-lm(term~., data = data.temp)
+  summary(m.rf) # adj R2 = 0.231, pval = 0.0097
+  plot(m.rf) # 11, 21, 23, 37 (in cooks)
   
-  summary(m.spear)
-  
-  plot(m.spear)
-  
+  #################################################
   # stepAIC:
+  #################################################
   
-  # v1: full model:
-  
-  # build a model using stepAIC chosen predictors:
-  
-  # find the best predictor name for the CQ parameter for use in the simple model:
-  
-  # n<-l.cor.MLR[[i]]$term[which.max(abs(l.cor.MLR[[i]]$Spearman_Correlation))]
+  #### v1: full model:
   
   # stepAIC workflow:
-  
   fit0 <- lm(term~1,data=l.cor.MLR.full[[i]])
   up.model <- paste("~", paste(colnames(l.cor.MLR.full[[i]][,-1]), collapse=" + "))
-  fit.both <- stepAIC(fit0,
-                    direction="both",
-                    scope=
-                      list(lower=fit0,
-                           upper=up.model)
-                    ,
-                    trace = FALSE
-  )
+  m.step.all <- stepAIC(fit0,direction="both",scope=list(lower=fit0,upper=up.model),trace = FALSE)
+  summary(m.step.all) # doesnt work
   
-  summary(fit.both)
+  #### v2: reduce predictor set prior to building full model:
   
-  # v2: reduce predictor set prior to building full model:
-  
-  # v2.1: check which predictors have the highest coefficent of variability among the 40 observations:
+  ### v2.1: check which predictors have the highest coefficent of variability among the 40 observations:
   
   v.mean<-sapply(l.cor.MLR.full[[i]][,-1], mean, na.rm=T)
   v.sd<-sapply(l.cor.MLR.full[[i]][,-1], sd, na.rm=T)
-  
   v.cv<-v.mean/v.sd
-  
   df.cv<-tibble::rownames_to_column(as.data.frame(v.cv), "Attribute")%>%
     rename(var=2)%>%
     arrange(desc(var))
-  
-  # build the full model using the top n-1:
-  
+  # the following top n-1 predictors are:
+  df.cv$Attribute[1:39]
+  # use stepAIC to build a 'full' model using the top n-1:
+  fit0 <- lm(term~1,data=l.cor.MLR.full[[i]])
   up.model <- paste("~", paste(colnames(l.cor.MLR.full[[i]]%>%select(df.cv$Attribute[1:39])), collapse=" + "))
-  fit.both <- stepAIC(fit0,
-                      direction="both",
-                      scope=
-                        list(lower=fit0,
-                             upper=up.model)
-                      ,
-                      trace = T
-  )
+  m.step.39.cv <- stepAIC(fit0,direction="both",scope=list(lower=fit0,upper=up.model),trace = FALSE)
+  summary(m.step.39.cv) # adj R2 = 0.7047, pval = 7.4e-08
+  # this is pretty good but I still want p<n/10 
+  # so use leaps to determine best 4:
+  var.temp<-strsplit(as.character(m.step.39.cv$terms)[3],split=' + ', fixed=TRUE)[[1]]
+  data.temp<-l.cor.MLR.full[[i]]%>%select(term, var.temp)
+  m.leaps.step.cv.39to8to4<-regsubsets(term~.,data=data.temp,nbest=1)
+  summary(m.leaps.step.cv.39to8to4)
+  rownames(as.data.frame(coef(m.leaps.step.cv.39to8to4, 4)))[-1]
+  # now build an lm with these 4:
+  data.temp<-select(data.temp, term, rownames(as.data.frame(coef(m.leaps.step.cv.39to8to4, 4)))[-1])
+  m.leaps.step.cv.39to8to4<-lm(term~., data=data.temp)
+  summary(m.leaps.step.cv.39to8to4) # adj r2 = 0.5395, pval = 2.2e-06
+  plot(m.leaps.step.cv.39to8to4) # 39, 21, 23 (21 in cooks)
   
-  summary(fit.both)
-  
-  # v2.2: check which predictors have the highest ariability among the 40 observations:
+  ### v2.2: check which predictors have the highest variability among the 40 observations:
   
   v.var<-sapply(l.cor.MLR.full[[i]][,-1], var, na.rm=T)
-  
   df.var<-tibble::rownames_to_column(as.data.frame(v.var), "Attribute")%>%
     rename(var=2)%>%
     arrange(desc(var))
-  
+  # the following top n-1 predictors are:
+  df.var$Attribute[1:39]
   # build the full model using the top n-1:
-  
+  fit0 <- lm(term~1,data=l.cor.MLR.full[[i]])
   up.model <- paste("~", paste(colnames(l.cor.MLR.full[[i]]%>%select(df.var$Attribute[1:39])), collapse=" + "))
-  fit.both <- stepAIC(fit0,
-                      direction="both",
-                      scope=
-                        list(lower=fit0,
-                             upper=up.model)
-                      ,
-                      trace = T
-  )
+  m.step.39.var <- stepAIC(fit0,direction="both",scope=list(lower=fit0,upper=up.model),trace = FALSE)
+  summary(m.step.39.var) # adj R2 = 0.9259, pval = 1.01e-08
+  # this is amazing but we shouldn't use a model with 22 predictors
+  # so use leaps to determine best 4:
+  var.temp<-strsplit(as.character(m.step.39.var$terms)[3],split=' + ', fixed=TRUE)[[1]]
+  data.temp<-l.cor.MLR.full[[i]]%>%select(term, var.temp)
+  m.leaps.step.var.39to22to4<-regsubsets(term~.,data=data.temp,nbest=1)
+  summary(m.leaps.step.var.39to22to4)
+  rownames(as.data.frame(coef(m.leaps.step.var.39to22to4, 4)))[-1]
+  # now build an lm with these 4:
+  data.temp<-select(data.temp, term, rownames(as.data.frame(coef(m.leaps.step.var.39to22to4, 4)))[-1])
+  m.leaps.step.var.39to22to4<-lm(term~., data=data.temp)
+  summary(m.leaps.step.var.39to22to4) # adj r2 = 0.467, pval = 2.5e-05
+  plot(m.leaps.step.var.39to22to4) # 23, 25, 10, 21 (21 in cooks)
   
-  summary(fit.both)
+  #################################################
+  # LEAPS:
+  # (straight up with all 306 varables):
+  #################################################
   
   # leaps: (doesnt run, too big)
   
-  fit.reg<-leaps::regsubsets(term~.,data=l.cor.MLR.full[[i]],nbest=4, really.big=T)
+  # fit.reg<-leaps::regsubsets(term~.,data=l.cor.MLR.full[[i]],nbest=4, really.big=T)
   
-  # lasso: (both lassos dont work)
+  #################################################
+  # LASSO:
+  # I dont know the difference between the two lasso methods I have below
+  #################################################
   
-  #Define predictor and response variables
+  #### lasso v1: 
+  
+  # Define predictor and response variables
   y <- l.cor.MLR.full[[i]]$term
   x <- data.matrix(l.cor.MLR.full[[i]][, -1])
-  
   #fit lasso regression model using k-fold cross-validation
   cv_model <- cv.glmnet(x, y, alpha = 1)
   best_lambda <- cv_model$lambda.min
-  
   #display optimal lambda value
   best_lambda
-  
   #view plot of test MSE's vs. lambda values
   plot(cv_model)
-  
   #view coefficients of best model
   best_model <- glmnet(x, y, alpha = 1, lambda = best_lambda)
   coef(best_model)
+  # get non zero coeffs:
+  Shat.v1 <- rownames(coef(best_model))[which(coef(best_model) != 0)]
+  # since only 3 given, build lm with these!:
+  data.temp<-select(l.cor.MLR.full[[i]], term, Shat.v1[-1])
+  m.lasso.v1<-lm(term~., data=data.temp)
+  summary(m.lasso.v1) # adj r2 = 0.376, pval = 0.00016
+  plot(m.lasso.v1) # 23, 15, 21, 28 (28 in cooks)
   
-  # lasso v2:
+  #### lasso v2:
   
+  #Define predictor and response variables
   ytrain <- l.cor.MLR.full[[i]]$term
   xtrain <- data.matrix(l.cor.MLR.full[[i]][, -1])
-  
+  # fit model:
   fit.lasso.glmnet <-glmnet(x=xtrain,y=ytrain,alpha=1) 
-  
+  # fit cv (?)
   cv.lasso.glmnet <-cv.glmnet(x=xtrain,y=ytrain,alpha=1) 
   plot(cv.lasso.glmnet)
-  
+  # save beta coefficents (?)
   beta.lasso <- coef(fit.lasso.glmnet, s = cv.lasso.glmnet$lambda.min)
-  names(beta.lasso) <- colnames(xtrain)
   beta.lasso
-  
-  Shat <- rownames(beta.lasso)[which(beta.lasso != 0)]
-  Shat
+  # get non zero coeffs:
+  Shat.v2 <- rownames(beta.lasso)[which(beta.lasso != 0)]
+  # since only 4 given, build lm with these!:
+  data.temp<-select(l.cor.MLR.full[[i]], term, Shat.v2[-1])
+  m.lasso.v2<-lm(term~., data=data.temp)
+  summary(m.lasso.v2) # adj r2 = 0.43, pval = 7.8e-05
+  plot(m.lasso.v2) # 21, 39, 23, 28 (28 in cooks)
 
   #################################################
   # Correlations:
@@ -2182,153 +2204,157 @@ for (i in 1:4){
   correlationMatrix <- cor(l.cor.MLR.full[[i]][,-1])
   # summarize the correlation matrix
   print(correlationMatrix)
-  ggcorrplot(correlationMatrix)
+  # ggcorrplot(correlationMatrix)
   # find attributes that are highly corrected (ideally >0.75)
-  highlyCorrelated <- findCorrelation(correlationMatrix, cutoff=0.75)
+  highlyCorrelated <- caret::findCorrelation(correlationMatrix, cutoff=0.5)
   # print indexes of highly correlated attributes
   print(highlyCorrelated)
+  unique(highlyCorrelated)
+  # remove highly correlated variables:
+  data.temp<-l.cor.MLR.full[[i]][,-c(highlyCorrelated+1)]
+  # stepAIC workflow:
+  fit0 <- lm(term~1,data=data.temp)
+  up.model <- paste("~", paste(colnames(data.temp[,-1]), collapse=" + "))
+  m.step.cor <- stepAIC(fit0,direction="both",scope=list(lower=fit0,upper=up.model),trace = FALSE)
+  summary(m.step.cor) # adj r2=.4423,pval=0.0006
+  # leaps workflow:
+  var.temp<-strsplit(as.character(m.step.cor$terms)[3],split=' + ', fixed=TRUE)[[1]]
+  data.temp<-l.cor.MLR.full[[i]]%>%select(term, var.temp)
+  m.leaps.step.cor<-regsubsets(term~.,data=data.temp,nbest=1)
+  summary(m.leaps.step.cor)
+  rownames(as.data.frame(coef(m.leaps.step.cor, 4)))[-1]
+  data.temp<-select(data.temp, term, rownames(as.data.frame(coef(m.leaps.step.cor, 4)))[-1])
+  m.leaps.step.cor<-lm(term~., data=data.temp)
+  summary(m.leaps.step.cor) # adj r2 = 0.2911, pval = 0.0027
+  plot(m.leaps.step.cor) # 23, 1, 21 
   
   #################################################
   # Feature Importance
   #################################################
   
-  control <- trainControl(method="repeatedcv", number=10, repeats=3)
+  control <- caret::trainControl(method="repeatedcv", number=10, repeats=3)
   # train the model
-  model <- train(term~., data=l.cor.MLR.full[[i]], method="leapSeq", preProcess="scale", trControl=control)
+  model <- caret::train(term~., data=l.cor.MLR.full[[i]], method="leapSeq", preProcess="scale", trControl=control)
   # estimate variable importance
   importance <- varImp(model, scale=FALSE)
   # summarize importance
   print(importance)
   # plot importance
   plot(importance)
-  
-  # build a lm with the most important features:
-  
-  x<-tibble::rownames_to_column(importance$importance, "Attribute")%>%
-    arrange(desc(Overall))
-  
-  data.temp<-l.cor.MLR.full[[i]]%>%select(term, x$Attribute[1:4])
-  
-  m.fi<-lm(term~., data = data.temp)
-  
-  summary(m.fi)
-  
-  plot(m.fi)
+  # get top 4 most important:
+  x<-tibble::rownames_to_column(importance$importance, "Attribute")%>%arrange(desc(Overall))
+  # build lm with top 4:
+  data.temp<-select(l.cor.MLR.full[[i]], term, x$Attribute[1:4])
+  m.feat_import.4<-lm(term~., data= data.temp)
+  summary(m.feat_import.4) # adj r2 = 0.2229, pval=0.01148
+  plot(m.feat_import.4) # 23, 21, 11
   
   #################################################
   # Feature Selection:
   #################################################
   
   # define the control using a random forest selection function
-  control <- rfeControl(functions=rfFuncs, method="cv", number=10)
+  control <- caret::rfeControl(functions=rfFuncs, method="cv", number=10)
   # run the RFE algorithm
-  results <- rfe(l.cor.MLR.full[[i]][,-1], l.cor.MLR.full[[i]][,1], sizes=c(1:4), rfeControl=control)
+  results <- caret::rfe(l.cor.MLR.full[[i]][,-1], l.cor.MLR.full[[i]][,1], sizes=c(1:4), rfeControl=control)
   # summarize the results
   print(results)
   # list the chosen features
   predictors(results)
   # plot the results
   plot(results, type=c("g", "o"))
+  # build lm with top 4:
+  x<-predictors(results)[1:4]
+  # build lm with top 4:
+  data.temp<-select(l.cor.MLR.full[[i]], term, x)
+  m.feat_import.4<-lm(term~., data= data.temp)
+  summary(m.feat_import.4) # adj r2 = 0.244, pval=0.0074
+  plot(m.feat_import.4) # 23, 21, 27
+  
+  #################################################
+  # PCA:
+  # http://www.sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/112-pca-principal-component-analysis-essentials/
+  #################################################
+  
+  data.temp<-l.cor.MLR.full[[i]][,-1]
+  res.pca <- PCA(data.temp, graph = FALSE)
+  print(res.pca)
+  eig.val <- get_eigenvalue(res.pca)
+  eig.val # sum(eig.val[,1]) # The sum of all the eigenvalues give a total variance of p (305 here).
+  fviz_eig(res.pca, addlabels = TRUE, ylim = c(0, 50))
+  var <- get_pca_var(res.pca)
+  var
+  fviz_pca_var(res.pca, col.var = "black")
+  library("corrplot")
+  corrplot(var$cos2, is.corr=FALSE)
+  fviz_cos2(res.pca, choice = "var", axes = 1:2)
+  fviz_pca_var(res.pca, col.var = "cos2",gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel = TRUE) # Avoid text overlapping)
+  fviz_pca_var(res.pca, alpha.var = "cos2")
+  corrplot(var$contrib, is.corr=FALSE) 
+  # Contributions of variables to PC1
+  fviz_contrib(res.pca, choice = "var", axes = 1, top = 10)
+  # Contributions of variables to PC2
+  fviz_contrib(res.pca, choice = "var", axes = 2, top = 10)
+  # The total contribution to PC1 and PC2 is obtained with the following R code:
+  fviz_contrib(res.pca, choice = "var", axes = 1:2, top = 10)
+  # The most important (or, contributing) variables can be highlighted on the correlation plot as follow:
+  fviz_pca_var(res.pca, col.var = "contrib",gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"))
+  # Create a random continuous variable of length 10
+  set.seed(123)
+  my.cont.var <- rnorm(305)
+  # Color variables by the continuous variable
+  fviz_pca_var(res.pca, col.var = my.cont.var,gradient.cols = c("blue", "yellow", "red"),legend.title = "Cont.Var")
+  # Create a grouping variable using kmeans
+  # Create 3 groups of variables (centers = 3)
+  set.seed(123)
+  res.km <- kmeans(var$coord, centers = 3, nstart = 25)
+  grp <- as.factor(res.km$cluster)
+  # Color variables by groups
+  fviz_pca_var(res.pca, col.var = grp, palette = c("#0073C2FF", "#EFC000FF", "#868686FF"),legend.title = "Cluster")
+  # graph of individuals
+  fviz_pca_ind(res.pca, col.ind = "cos2", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),repel = TRUE) # Avoid text overlapping (slow if many points))
+  # You can also change the point size according the cos2 of the corresponding individuals:
+  fviz_pca_ind(res.pca, pointsize = "cos2", pointshape = 21, fill = "#E7B800",repel = TRUE) # Avoid text overlapping (slow if many points)
+  # Total contribution on PC1 and PC2
+  fviz_contrib(res.pca, choice = "ind", axes = 1:2)
+  # biplot:
+  fviz_pca_biplot(res.pca, repel = TRUE,col.var = "#2E9FDF", col.ind = "#696969"  )
+  
+  # Im just going to stop with PCA for now because I dont know how to interpret results:
+  
+  #################################################
+  # Looking at regression outliers:
+  #################################################
+  
+  # The following observations (1-40) came up in the plot(lm) calls throughout thecode above for i=1 (OLS.I):
+  # n times (second number)
+  
+  x<-c(1, 1, 10, 1 , 11, 2, 15, 1, 21, 9, 23, 9, 25, 1, 27, 1, 28, 2, 37, 2, 39, 2)
+  x<-as.data.frame(do.call(cbind, split(x, c("Site", "n")))) %>% separate_rows("n", sep = ",")%>%arrange(n)
+  
+  # more than any others, sites 21 and 23 kept coming up as outliers
+  # look at these sites. to do this:
+  
+  look_at_sites<-l.cor.MLR.full.w_name[[i]][c(21,23, 37, 39),]$Name 
+  
+  map.1<-df.sf.NWIS%>%filter(Name %in% look_at_sites)
+    
+  mapview(map.1)
+  
+  # if I look at the facet plot for CQ type and land use, nothing stands out 
+  # about these problem sites. I mean, two are ag and two are undeveloped, but I 
+  # dont trust the land use classifications. Also two classes out of 4 isnt that impressive. 
   
   
-  
-  
-  
-  # createformula with this predictor:
-
-  n<-paste('term ~', n)
-
-  # create simple model:
-
-  m.simple<-lm(n,l.cor.MLR.full[[i]])
-
-  # create full model:
-
-  m.full<-lm(term~., l.cor.MLR.full[[i]])
-
-  # create AIC object:
-
-  aic<-stepAIC(m.simple, scope = list(upper=m.full, lower =~1), direction = 'both', trace = FALSE)
-
-  summary(aic)
-
-  # save aic object to list:
-
-  l.aic[[i]]<-aic
+#########
   
 }
 
-# look at summary of aic objects:
-
-tab_model(l.aic)
-
-lapply(l.aic, summary)
-
-# set names of list elements:
-
-names(l.aic)<-names(df.OLS_Sens)[2:5]
-
-names(l.aic[[1]]$model)[-1]
-  
-# extract best predictors for each parameter:
-
-l<-lapply(l.aic, \(i) names(i$model)[-1])
-
-# look at univariate plots of these. to do this:
-
-# make a list of ggplot objects for each parameter:
-
-l.MLR.plots<-lapply(1:4, \(i) df.OLS_Sens%>%
-                       select(i+1, l[[i]])%>%
-                       as.data.frame()%>%
-                      pivot_longer(cols = 2:last_col(), names_to = 'Attribute', values_to = 'value')%>%
-                      mutate(Attribute = factor(Attribute, levels = l[[i]]))%>%
-                      ggplot(., aes(y = !!sym(names(df.OLS_Sens)[i+1]), x = value))+
-                      facet_wrap('Attribute', scales = 'free')+
-                      geom_point()+
-                      geom_smooth(method = 'lm')+
-                      ggtitle((names(df.OLS_Sens)[i+1]))
-                       
-                    
-                    )
-
-l.MLR.plots
-
-# build MLR models:
-
-# just uing the top 4 predictors for each parameter: to do this:
-
-# create a list of the dataframes of the top 4 for each paramerter: 
-
-l.lm.MLR_top4<-lapply(1:4, \(i) df.OLS_Sens%>%
-                         select(i+1, l[[i]])%>%
-                         as.data.frame()%>%
-                         # rename(term = 1)%>%
-                select(1:5))
-
-x<-l.lm.MLR_top4[[1]]
-
-# set names of list:
-
-names(l.lm.MLR_top4)<-names(df.OLS_Sens)[2:5]
-
-# create avector of the formulas for each parameter:
-
-v.formulas<-sapply(l.lm.MLR_top4, \(i) paste(names(i)[1], '~', paste(names(i)[2:5], collapse="+")))
-
-# loop through the list and the vector of forumlas to build lm models:
-    
-l.lm.MLR_top4<-lapply(seq_along(l.lm.MLR_top4), \(i) lm(v.formulas[i], data = l.lm.MLR_top4[[i]]))
-
-# plot residual and qq plots for each parameter:
-
-par(mfrow = c(2, 4))
-
-lapply(seq_along(l.lm.MLR_top4), \(i) plot(l.lm.MLR_top4[[i]], main = names(l.lm.MLR_top4)[i], which=c(2,1)))
 
 # summarytable of the 4 models:
+# (deosnt run rn, just wanted to keep the code for tab_model function)
 
-tab_model(l.lm.MLR_top4, dv.labels = names(df.OLS_Sens)[2:5])
+# tab_model(l.lm.MLR_top4, dv.labels = names(df.OLS_Sens)[2:5])
 
 
 #
@@ -2672,6 +2698,26 @@ p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
 
 p
 
+# plot of trouble sites from MLR analysis:
+
+
+p<-filter(df_Seg.2, site %in% look_at_sites)%>%
+  ggplot(., aes(x = log(Q_real), y = log(C)))+
+  geom_point(aes(color = Type), size = 1.5)+
+  scale_color_manual(name = "CQ Type", values = c("purple", "red", "blue", "green"))+
+  geom_smooth(method = 'lm')+
+  geom_line(aes(x = Q, y = Seg_C), color = 'yellow', size = 1.5)+
+  # geom_text(aes(x = 2, y = -2, label = CAFO_count), inherit.aes = FALSE, size = 30)+
+  facet_wrap(dplyr::vars(n_sample_rank), scales = 'free')+
+  theme(
+    strip.background = element_blank(),
+    strip.text.x = element_blank()
+  )+
+  geom_rect(data = df_Seg.2%>%distinct(df_Seg.2$site, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, fill = USGS.LU.Adjusted), alpha = .15)+
+  scale_fill_manual(name = "USGS Landuse\n(Adjusted)", values = c("red", "blue","purple", "green"))
+
+p
+
 # save(p1, file = 'Processed_Data/p1.Rdata') 
   
 # add CQ type to the mapping df with polygon trasperncy based on number of samples:
@@ -2689,7 +2735,13 @@ map.CQ_Type<-df.sf.NWIS.keep%>%
   #                        n >=500 ~ .9))
 # map:
 
-# mapview(map.CQ_Type, zcol = 'Type', alpha.regions = 'NEW')
+mapview(map.CQ_Type, zcol = 'Type', alpha.regions = 'NEW')
+
+# map of trouble sites in MLR section:
+
+x<-map.CQ_Type%>%filter(Name %in% look_at_sites)
+
+mapview(x, zcol = 'Type')
 
 ######################################################
  #### ~~~~ XY plot of Slopes and Intercepts ~~~~ ####

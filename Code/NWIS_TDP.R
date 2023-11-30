@@ -521,10 +521,6 @@ df.G2<-df.G2%>%filter(STAID %in% TDP_sites$site_no)
 
 
 
-# save.image(file = 'Processed_Data/NWIS_TDP.Rdata')
-load('Processed_Data/NWIS_TDP.Rdata')
-
-
 #
 
 
@@ -570,19 +566,20 @@ load('Processed_Data/NWIS_TDP.Rdata')
 # nut I am not including that requirment any more for the CQ manuscript
 # but I am still keeping the 2001 requirment because gauges 2 has NLCD 2006, which I amsati
 
-temp<-df.NWIS.TN_CQ%>%filter(year(sample_dt) >= 2001)
+temp<-df.NWIS.TDP_CQ%>%filter(year(sample_dt) >= 2001)
 
 # 39 sites
 
 # map of this new set of sites:
 
-df.NWIS.TN_site_metadata%>%
+df.NWIS.TDP_site_metadata%>%
+  filter(site_no %in% temp$site_no)%>%
   st_as_sf(.,coords=c('dec_long_va','dec_lat_va'), crs = 4326, remove = FALSE)%>%
   mapview(.)
 
 # remove sites below a certain latitude to get rid of long island:
 
-temp1<-filter(df.NWIS.TN_site_metadata, dec_lat_va >40.9364)
+temp1<-filter(df.NWIS.TDP_site_metadata, dec_lat_va >40.9364)
 
 # look at map:
 
@@ -608,7 +605,7 @@ unique(temp$site_no)
 
 # map:
 
-df.NWIS.TN_site_metadata%>%
+df.NWIS.TDP_site_metadata%>%
   filter(site_no %in% temp$site_no)%>%
   st_as_sf(.,coords=c('dec_long_va','dec_lat_va'), crs = 4326, remove = FALSE)%>%
   mapview(.)
@@ -616,12 +613,14 @@ df.NWIS.TN_site_metadata%>%
 
 # number of sites ingauges 2 and not on LI (i.e. without post 2001 filter):
 
-length(unique((temp1%>%
-                 filter(site_no%in% df.G2$STAID))$site_no))
+length(unique((temp1%>% filter(site_no%in% df.G2$STAID))$site_no))
 
 #
 
 
+# save.image(file = 'Processed_Data/NWIS_TDP.Rdata')
+load('Processed_Data/NWIS_TDP.Rdata')
 
+#
 
 

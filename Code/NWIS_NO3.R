@@ -50,6 +50,9 @@ source("Code/Ryan_functions.R")
 
 ####################### Workflow #######################
 
+# NO3 pcode:
+
+pcode<-'00620'
 
 
 
@@ -111,7 +114,7 @@ df.NWIS.Q_sites<-df.NWIS.Q_sites%>%
 
 # use function I created (sourced) to get a dataframe of sites for just NO3 with #samples = 20 threshold:
 
-df.NWIS.NO3_sites<-fun.df.Pair_consit_flow('00620', df.NWIS.Q_sites, n_samples = 20, state = 'NY')
+df.NWIS.NO3_sites<-fun.df.Pair_consit_flow(pcode, df.NWIS.Q_sites, n_samples = 20, state = 'NY')
 
 # write.csv(df.NWIS.NO3_sites, "Raw_Data/df.NWIS.NO3_sites.csv", row.names=FALSE)
 
@@ -128,7 +131,7 @@ df.NWIS.Q.for_NO3<-read.csv("Raw_Data/df.NWIS.Q.for_NO3.csv", colClasses = c(sit
 
 # download the raw discrete NO3 sample data:
 
-df.NWIS.NO3<-readNWISqw(siteNumbers = df.NWIS.NO3_sites$site_no, parameterCd = '00620')
+df.NWIS.NO3<-readNWISqw(siteNumbers = df.NWIS.NO3_sites$site_no, parameterCd = pcode)
 
 # write.csv(df.NWIS.NO3, "Raw_Data/df.NWIS.NO3.csv", row.names=FALSE)
 
@@ -497,7 +500,7 @@ df.G2<-reduce(l.G2, full_join, by = "STAID")
 
 df.G2<-df.G2%>%filter(STAID %in% NO3_sites$site_no)
 
-# only 48 of the orginal 61  sites are in gauges 2
+# only 48 of the orginal 66  sites are in gauges 2
 
 
 
@@ -528,19 +531,20 @@ df.G2<-df.G2%>%filter(STAID %in% NO3_sites$site_no)
 # nut I am not including that requirment any more for the CQ manuscript
 # but I am still keeping the 2001 requirment because gauges 2 has NLCD 2006, which I amsati
 
-temp<-df.NWIS.TN_CQ%>%filter(year(sample_dt) >= 2001)
+temp<-df.NWIS.NO3_CQ%>%filter(year(sample_dt) >= 2001)
 
 # 39 sites
 
 # map of this new set of sites:
 
-df.NWIS.TN_site_metadata%>%
+df.NWIS.NO3_site_metadata%>%
+  filter(site_no %in% temp$site_no)%>%
   st_as_sf(.,coords=c('dec_long_va','dec_lat_va'), crs = 4326, remove = FALSE)%>%
   mapview(.)
 
 # remove sites below a certain latitude to get rid of long island:
 
-temp1<-filter(df.NWIS.TN_site_metadata, dec_lat_va >40.9364)
+temp1<-filter(df.NWIS.NO3_site_metadata, dec_lat_va >40.9364)
 
 # look at map:
 
@@ -566,7 +570,7 @@ unique(temp$site_no)
 
 # map:
 
-df.NWIS.TN_site_metadata%>%
+df.NWIS.NO3_site_metadata%>%
   filter(site_no %in% temp$site_no)%>%
   st_as_sf(.,coords=c('dec_long_va','dec_lat_va'), crs = 4326, remove = FALSE)%>%
   mapview(.)
@@ -574,8 +578,7 @@ df.NWIS.TN_site_metadata%>%
 
 # number of sites ingauges 2 and not on LI (i.e. without post 2001 filter):
 
-length(unique((temp1%>%
-                 filter(site_no%in% df.G2$STAID))$site_no))
+length(unique((temp1%>%filter(site_no%in% df.G2$STAID))$site_no))
 
 #
 

@@ -43,11 +43,6 @@ meters_to_miles = 1/1609.334
 
 source("Code/Ryan_functions.R")
 
-####################### Goal of code #######################
-
-# 1) Process the NWIS database for the CQ analysis
-# 2) Run through CQ metrics/watershed attribute correlation
-
 ####################### Workflow #######################
 
 # NO3 pcode:
@@ -107,55 +102,55 @@ df.NWIS.Q_sites<-df.NWIS.Q_sites%>%
 
 # From the sites with daily flow data, determine which sites also have over 99 discrete samples . To do this:
 
-# use function I created (sourced) to get a dataframe of sites for just TN with #samples = 20 threshold:
+# use function I created (sourced) to get a dataframe of sites for just NO3 with #samples = 20 threshold:
 
-# df.NWIS.TN_sites<-fun.df.Pair_consit_flow(pcode, df.NWIS.Q_sites, n_samples = 20, state = 'NY')
+# df.NWIS.NO3_sites<-fun.df.Pair_consit_flow(pcode, df.NWIS.Q_sites, n_samples = 20, state = 'NY')
 
-# write.csv(df.NWIS.TN_sites, "Raw_Data/df.NWIS.TN_sites.csv", row.names=FALSE)
+# write.csv(df.NWIS.NO3_sites, "Raw_Data/df.NWIS.NO3_sites.csv", row.names=FALSE)
 
-df.NWIS.TN_sites<-read.csv("Raw_Data/df.NWIS.TN_sites.csv", colClasses = c(site_no = "character"))
+df.NWIS.NO3_sites<-read.csv("Raw_Data/df.NWIS.NO3_sites.csv", colClasses = c(site_no = "character"))
 
 # download the raw daily flow data for these sites. To do this:
-# I already downloaded the daily flow data for the 102 TN sites
-# which ever sites do notoverlap with TN will be downloaded here. To do this:
+# I already downloaded the daily flow data for the TP and TN sites
+# which ever sites do notoverlap with NO3 will be downloaded here. To do this:
 
-# read in the flow data for the TN sites:
+# read in the flow data for the TP and TN sites:
 
-# df.NWIS.Q<-read.csv("Raw_Data/df.NWIS.Q.csv", colClasses = c(site_no = "character"))%>%mutate(Date = as.Date(Date))
+# df.NWIS.Q.combined<-read.csv("Raw_Data/df.NWIS.Q.combined.csv", colClasses = c(site_no = "character"))%>%mutate(Date = as.Date(Date))
 
-# determine which of the TN sites dont overlap:
+# determine which of the NO3 sites dont overlap:
 
-# df.overlap<-df.NWIS.TN_sites%>%filter(!site_no %in% df.NWIS.Q$site_no)
+# df.overlap<-df.NWIS.NO3_sites%>%filter(!site_no %in% df.NWIS.Q.combined$site_no)
 
 # download the raw flow data for the sites still needed:
 
-# df.NWIS.Q.TN_needed<-readNWISdv(siteNumbers = df.overlap$site_no, parameterCd = '00060', startDate = "", endDate = "", statCd = "00003")
+# df.NWIS.Q.NO3_needed<-readNWISdv(siteNumbers = df.overlap$site_no, parameterCd = '00060', startDate = "", endDate = "", statCd = "00003")
 
-# unique(df.NWIS.Q.TN_needed$site_no) # only get three of 25 that need... sucks but idk
+# unique(df.NWIS.Q.NO3_needed$site_no) # only get 9 of 22 that need... sucks but idk
 
-# merge with the TN sites flow data:
+# merge with the NO3 sites flow data:
 
-# df.NWIS.Q.combined<-bind_rows(df.NWIS.Q,df.NWIS.Q.TN_needed)
+# df.NWIS.Q.combined<-bind_rows(df.NWIS.Q.combined,df.NWIS.Q.NO3_needed)
 
-# write out this df to file:
+# write out this df to file: (be carefull!! writing over!!)
 
 # write.csv(df.NWIS.Q.combined, "Raw_Data/df.NWIS.Q.combined.csv", row.names=FALSE)
 
-# read it back in as 'df.NWIS.Q.for_TN':
+# read it back in as 'df.NWIS.Q.for_NO3':
 
-df.NWIS.Q.for_TN<-read.csv("Raw_Data/df.NWIS.Q.combined.csv", colClasses = c(site_no = "character"))%>%mutate(Date = as.Date(Date))
+df.NWIS.Q.for_NO3<-read.csv("Raw_Data/df.NWIS.Q.combined.csv", colClasses = c(site_no = "character"))%>%mutate(Date = as.Date(Date))
 
-# filter to just the TN sites:
+# filter to just the NO3 sites:
 
-df.NWIS.Q.for_TN<-df.NWIS.Q.for_TN%>%filter(site_no %in% df.NWIS.TN_sites$site_no)
+df.NWIS.Q.for_NO3<-df.NWIS.Q.for_NO3%>%filter(site_no %in% df.NWIS.NO3_sites$site_no)
 
-# download the raw discrete TN sample data:
+# download the raw discrete NO3 sample data:
 
-# df.NWIS.TN<-readNWISqw(siteNumbers = df.NWIS.TN_sites$site_no, parameterCd = pcode)
+# df.NWIS.NO3<-readNWISqw(siteNumbers = df.NWIS.NO3_sites$site_no, parameterCd = pcode)
 
-# write.csv(df.NWIS.TN, "Raw_Data/df.NWIS.TN.csv", row.names=FALSE)
+# write.csv(df.NWIS.NO3, "Raw_Data/df.NWIS.NO3.csv", row.names=FALSE)
 
-df.NWIS.TN<-read.csv("Raw_Data/df.NWIS.TN.csv", colClasses = c(site_no = "character"))%>%mutate(sample_dt = as.Date(sample_dt))
+df.NWIS.NO3<-read.csv("Raw_Data/df.NWIS.NO3.csv", colClasses = c(site_no = "character"))%>%mutate(sample_dt = as.Date(sample_dt))
 
 #
 
@@ -183,54 +178,54 @@ df.NWIS.TN<-read.csv("Raw_Data/df.NWIS.TN.csv", colClasses = c(site_no = "charac
 
 #### Building CQ df ####
 
-# join the TN with the flow df:
+# join the NO3 with the flow df:
 
-df.NWIS.TN_CQ<-left_join(df.NWIS.TN, df.NWIS.Q.for_TN, by=c("site_no"="site_no", "sample_dt"="Date"))
+df.NWIS.NO3_CQ<-left_join(df.NWIS.NO3, df.NWIS.Q.for_NO3, by=c("site_no"="site_no", "sample_dt"="Date"))
 
 # remove observations where there are not CQ pairs:
 
-df.NWIS.TN_CQ<-df.NWIS.TN_CQ%>%drop_na(X_00060_00003)
+df.NWIS.NO3_CQ<-df.NWIS.NO3_CQ%>%drop_na(X_00060_00003)
 
 # take average of multiple samples on the same day at the same site:
 
-df.NWIS.TN_CQ<-df.NWIS.TN_CQ%>%
+df.NWIS.NO3_CQ<-df.NWIS.NO3_CQ%>%
   group_by(site_no, sample_dt)%>%
   summarise_at(vars(result_va, X_00060_00003), funs(mean(., na.rm=TRUE)))
 
-# arrange by number of TN observations. To do this:
+# arrange by number of NO3 observations. To do this:
 
 # first arrange the dataframe with the number of samples: 
 
-temp<-df.NWIS.TN%>%group_by(site_no)%>%
+temp<-df.NWIS.NO3%>%group_by(site_no)%>%
   summarise(n=n())%>%
   arrange(desc(n))%>%
   mutate(n_sample_rank=rank(-n, ties.method='first'))
 
-# merge this df with df.NWIS.TN_CQ and arrange by the new column:
+# merge this df with df.NWIS.NO3_CQ and arrange by the new column:
 
-df.NWIS.TN_CQ<-left_join(df.NWIS.TN_CQ,temp, by='site_no')%>%
+df.NWIS.NO3_CQ<-left_join(df.NWIS.NO3_CQ,temp, by='site_no')%>%
   arrange(n_sample_rank)
 
 # next step is to use Q yield to get better looking plot... idk if it will help but want to try also doesnt hurt to have the watershed areas as well. To do this:
 
 # download the drainage areas from site metadata using readNWISsite
 
-# df.NWIS.TN_site_metadata<-readNWISsite(siteNumbers = unique(df.NWIS.TN_CQ$site_no))
+# df.NWIS.NO3_site_metadata<-readNWISsite(siteNumbers = unique(df.NWIS.NO3_CQ$site_no))
 
-# write.csv(df.NWIS.TN_site_metadata, "Raw_Data/df.NWIS.TN_site_metadata.csv", row.names=FALSE)
+# write.csv(df.NWIS.NO3_site_metadata, "Raw_Data/df.NWIS.NO3_site_metadata.csv", row.names=FALSE)
 
-df.NWIS.TN_site_metadata<-read.csv("Raw_Data/df.NWIS.TN_site_metadata.csv", colClasses = c(site_no = "character"))
+df.NWIS.NO3_site_metadata<-read.csv("Raw_Data/df.NWIS.NO3_site_metadata.csv", colClasses = c(site_no = "character"))
 
 # then select just the site number and DA column:
 
-df.DA<-df.NWIS.TN_site_metadata%>%
+df.DA<-df.NWIS.NO3_site_metadata%>%
   select(site_no, drain_area_va)
 
-# finally merge with df.NWIS.TN_CQ and create a new Q column with area normalized flows (not worrying about units right now): 
+# finally merge with df.NWIS.NO3_CQ and create a new Q column with area normalized flows (not worrying about units right now): 
 # Note: will filter for NA in C and Q for breakpoint analysis in the next step as to keep the full list of sites with CQ pairs in this dataframe.
 # Note: Some sites returned NA on draiange areas in readNWISsite, but I'll delinate anyways so I want the full list:
 
-df.NWIS.TN_CQ<-left_join(df.NWIS.TN_CQ, df.DA, by = 'site_no')%>%
+df.NWIS.NO3_CQ<-left_join(df.NWIS.NO3_CQ, df.DA, by = 'site_no')%>%
   mutate(Q_yield = X_00060_00003/drain_area_va)
 
 #
@@ -268,12 +263,12 @@ davies.test.matrix<-NULL
 
 # create a new dataframe of only paired CQ observations (such that the breakpoit analysis function runs smoothly) (I didnt want to do this in loop for some reason, I cant remeber why but it wouldnt work):
 
-df.NWIS.TN_CQ_for_BP<-df.NWIS.TN_CQ%>%
+df.NWIS.NO3_CQ_for_BP<-df.NWIS.NO3_CQ%>%
   drop_na(result_va, Q_yield)
 
 # create a vector of ordered unique site names:
 
-temp.loop<-sort(unique(df.NWIS.TN_CQ_for_BP$site_no))
+temp.loop<-sort(unique(df.NWIS.NO3_CQ_for_BP$site_no))
 
 # test i for for loop building:
 
@@ -295,7 +290,7 @@ for (i in seq_along(temp.loop)){
     # add log transformed C and Q columns, as well as duplicated columns for renamed C and Q
     # filter for real log C and Q values so breakpoint analysis works smoothly:
     
-    df<-df.NWIS.TN_CQ_for_BP%>%
+    df<-df.NWIS.NO3_CQ_for_BP%>%
       filter(site_no == temp.loop[i])%>%
       mutate(log_C = log(result_va), log_Q = log(X_00060_00003), C = result_va, Q = X_00060_00003)%>%
       filter(is.finite(log_C))%>%
@@ -404,14 +399,14 @@ df_Seg<-left_join(df_Seg, temp[,c(1,3)], by = c('site'='site_no'))%>%
 
 # one last thing: lets look at a map of these:
 
-# map.NWIS.TN_sites<-df.NWIS.TN_site_metadata%>%
+# map.NWIS.NO3_sites<-df.NWIS.NO3_site_metadata%>%
 #   rename(longitude=8,latitude=7)%>%
 #   drop_na(latitude,longitude)%>%
 #   st_as_sf(.,coords=c('longitude','latitude'), crs = 4326)%>%
 #   mutate(site_id= paste(site_no, station_nm), n = NA, .before = 1)%>%
 #   select(c(1:3))
 
-# mapview(map.NWIS.TN_sites)
+# mapview(map.NWIS.NO3_sites)
 
 
 
@@ -441,11 +436,11 @@ df_Seg<-left_join(df_Seg, temp[,c(1,3)], by = c('site'='site_no'))%>%
 
 #### Tradeoff matrix ####
 
-# build a matrix of the number of TN samples as a function of watershed size. To do this:
+# build a matrix of the number of NO3 samples as a function of watershed size. To do this:
 
 # I already have a df with paired CQ observations and DA, just need to get the distinct sites:
 
-TN_sites<-df.NWIS.TN_CQ%>%distinct(site_no, .keep_all = T)
+NO3_sites<-df.NWIS.NO3_CQ%>%distinct(site_no, .keep_all = T)
 
 # set up df to populate:
 
@@ -463,7 +458,7 @@ min_DA<- c(25,50,100,150,250,500,1000)
 
 for (i in seq_along(n_sam)){
   
-  temp.i<-TN_sites%>%filter(n>n_sam[i])
+  temp.i<-NO3_sites%>%filter(n>n_sam[i])
   
   m$Unlimited[i]<-dim(temp.i)[1]
   
@@ -513,11 +508,11 @@ m
 # the first filter is to remove data points and thus potentially entire sites
 # that are prior to 2000:
 
-temp1<-df.NWIS.TN_CQ%>%filter(sample_dt >= 2001)
+temp1<-df.NWIS.NO3_CQ%>%filter(sample_dt >= 2001)
 
 unique(temp1$site_no)
 
-# 97 sites, BUT:
+# 53 sites, BUT:
 
 # how many of these sites have 20 paired CQ observations?
 
@@ -532,7 +527,7 @@ temp1.1<-temp1%>%
 
 dim(temp1.1)[1] 
 
-# only 84
+# only 36
 
 # reduce temp1 to these sites:
 
@@ -541,15 +536,15 @@ temp1<-temp1%>%filter(site_no %in% temp1.1$Name)
 # the next filter is to remove sites that are on long island
 # to do this use latitude:
 
-temp2<-filter(df.NWIS.TN_site_metadata, dec_lat_va >40.9364)
+temp2<-filter(df.NWIS.NO3_site_metadata, dec_lat_va >40.9364)
 
-# now use this site list to filter down the df.TN_CQ:
+# now use this site list to filter down the df.NO3_CQ:
 
 temp3<-temp1%>%filter(site_no %in% temp2$site_no)
 
 unique(temp3$site_no)
 
-# 70 sites
+# 22 sites
 
 # the last filter is gauges 2:
 
@@ -579,30 +574,30 @@ temp4<-temp3%>%filter(site_no %in% df.G2$STAID)
 
 unique(temp4$site_no)
 
-# 39 sites
+# 12 sites
 
 # save this as the df to move onto future analysis:
 
-df.TN_CQ<-temp4
+df.NO3_CQ<-temp4
 
 # map:
 
-# df.NWIS.TN_site_metadata%>%
+# df.NWIS.NO3_site_metadata%>%
 #   filter(site_no %in% temp4$site_no)%>%
 #   st_as_sf(.,coords=c('dec_long_va','dec_lat_va'), crs = 4326, remove = FALSE)%>%
 #   mapview(.)
 
 # number of sites in gauges 2:
 
-x<-filter(df.NWIS.TN_site_metadata, site_no %in%df.G2$STAID)
+x<-filter(df.NWIS.NO3_site_metadata, site_no %in% df.G2$STAID)
 
-# 68 sites
+# 48 sites
 
 # number of sites in gauges 2 and not on LI (i.e. without post 2001 filter):
 
 x<-temp2%>%filter(site_no%in% df.G2$STAID)
 
-# 53 sites
+# 33 sites
 
 
 
@@ -651,7 +646,7 @@ df.G2.reduced<-df.G2%>%select(c('STAID', pred_to_keep))
 
 # combined the reduced predictors df with the already filtered CQ data:
 
-df.Correlation<-df.TN_CQ%>%
+df.Correlation<-df.NO3_CQ%>%
   rename(Name = site_no)%>%
   select(Name, sample_dt,result_va, X_00060_00003)%>%mutate(log_C = log(result_va), log_Q = log(X_00060_00003), C = result_va, Q = X_00060_00003)%>%
   filter(is.finite(log_C))%>%
@@ -735,7 +730,7 @@ p1<-annotate_figure(p1, top = text_grob("Gauges 2",
                                         color = "red", face = "bold", size = 14))
 # plot:
 
-p1
+p1 # running this with the 12 sites for NO3 is not resulting in signfincant pvalues even though spearman correlaitons are -0.5!
 
 # save(p1, file = 'Processed_Data/p1.Rdata')
 
@@ -901,32 +896,32 @@ p<-df.NLCD06%>%
 
 # create a list of dataframes for each sites CQ observations:
 
-df.TN_CQ<-df.TN_CQ%>%
+df.NO3_CQ<-df.NO3_CQ%>%
   rename(Name = site_no)%>%
   mutate(log_C = log(result_va), log_Q = log(X_00060_00003), C = result_va, Q = X_00060_00003)%>%
   filter(is.finite(log_C))%>%
   filter(is.finite(log_Q))
 
-l.TN_CQ<-df.TN_CQ%>%
+l.NO3_CQ<-df.NO3_CQ%>%
   split(., .$Name)
 
 # create lm models for each site:
 
-l.TN_CQ.lm<-lapply(l.TN_CQ, \(i) lm(log_C~log_Q, data=i))
+l.NO3_CQ.lm<-lapply(l.NO3_CQ, \(i) lm(log_C~log_Q, data=i))
 
 # save the model coef ad pvals:
 
-TN_CQ.coef<-as.data.frame(bind_rows(lapply(l.TN_CQ.lm, \(i) summary(i)$coefficients[,1]), .id = 'site_no'))%>%
+NO3_CQ.coef<-as.data.frame(bind_rows(lapply(l.NO3_CQ.lm, \(i) summary(i)$coefficients[,1]), .id = 'site_no'))%>%
   rename(Intercept = 2, Slope = 3)
 
 # save the pvalues 
 
-TN_CQ.pvals<-as.data.frame(bind_rows(lapply(l.TN_CQ.lm, \(i) summary(i)$coefficients[,4]), .id = 'site_no'))%>%
+NO3_CQ.pvals<-as.data.frame(bind_rows(lapply(l.NO3_CQ.lm, \(i) summary(i)$coefficients[,4]), .id = 'site_no'))%>%
   rename(Intercept.pval = 2, Slope.pval = 3)
 
 # merge the two dfs:
 
-df.lm<-left_join(TN_CQ.coef,TN_CQ.pvals,by='site_no')
+df.lm<-left_join(NO3_CQ.coef,NO3_CQ.pvals,by='site_no')
 
 # add column for CQ type:
 
@@ -934,7 +929,7 @@ df.lm<-mutate(df.lm, Type = ifelse(Slope.pval>0.05, 'Stationary', ifelse(Slope>0
 
 # merge CQ type labels to the df for plotting
 
-df.TN_CQ<-left_join(df.TN_CQ,df.lm%>%select(site_no, Type),by=c('Name'='site_no'))
+df.NO3_CQ<-left_join(df.NO3_CQ,df.lm%>%select(site_no, Type),by=c('Name'='site_no'))
 
 # create a df for CQplot of all sites with BP analysis:
 

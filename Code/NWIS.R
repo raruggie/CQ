@@ -106,12 +106,14 @@ df.NWIS.Q_sites <- read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.Q_sites.csv", colClasses
 # I realize now that this is proably not needed since I am grouping by the site number so the resulting number used in the
 # raw flow data download will have what it has, but I am just goin to keep this (aka i could just use distinct?)
 # also rename some columns and convert them to numeric:
+# also filter to just the sites with over 20 nflow days since this is the number restriction on the number of samples:
 
 df.NWIS.Q_sites<-df.NWIS.Q_sites%>%
   group_by(site_no)%>%
   slice(which.max(count_nu))%>%
   rename(latitude = dec_lat_va, longitude = dec_long_va, nflowdays = count_nu, begin_date_flow = begin_date, end_date_flow = end_date)%>%
-  mutate(latitude = as.numeric(latitude), longitude = as.numeric(longitude))
+  mutate(latitude = as.numeric(latitude), longitude = as.numeric(longitude))%>%
+  filter(nflowdays>=20)
 
 # NOTE: whatNWISsites(stateCd = "NY", parameterCd = "00060") returns a dataframe with rnow = 1465
 # while whatNWISdata(stateCd = "NY", parameterCd = "00060") returns a dataframe with nrow = 2249 ?!?!
@@ -122,18 +124,19 @@ df.NWIS.Q_sites<-df.NWIS.Q_sites%>%
 
 # use function I created (sourced) to get a dataframe of sites for just TP with #samples = 20 threshold:
 
-# df.NWIS.TP_sites<-fun.df.Pair_consit_flow(pcode, df.NWIS.Q_sites, n_samples = 20)
+# df.NWIS.TP_sites<-fun.df.Pair_consit_flow(pcode, df.NWIS.Q_sites, n_samples = 20, state = 'NY')
 
-# write.csv(df.NWIS.TP_sites, "C:/PhD/CQ/Raw_Data/df.NWIS.TP_sites.csv", row.names=FALSE)
+# write.csv(df.NWIS.TP_sites, "Raw_Data/df.NWIS.TP_sites.csv", row.names=FALSE)
 
-df.NWIS.TP_sites<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.TP_sites.csv", colClasses = c(site_no = "character"))
+df.NWIS.TP_sites<-read.csv("Raw_Data/df.NWIS.TP_sites.csv", colClasses = c(site_no = "character"))
 
 # download the raw daily flow data for these sites. To do this:
+
 # readNWISdv can be used to download a single dataframe with all the raw flow data for a vector of gauge numbers (this takes a looong time):
 
 # df.NWIS.Q<-readNWISdv(siteNumbers = df.NWIS.TP_sites$site_no, parameterCd = '00060', startDate = "", endDate = "", statCd = "00003")
 
-# write.csv(df.NWIS.Q, "C:/PhD/CQ/Raw_Data/df.NWIS.Q.csv", row.names=FALSE)
+# write.csv(df.NWIS.Q, "Raw_Data/df.NWIS.Q.csv", row.names=FALSE)
 
 df.NWIS.Q<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.Q.csv", colClasses = c(site_no = "character"))
 
@@ -141,9 +144,9 @@ df.NWIS.Q<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.Q.csv", colClasses = c(site_no =
 
 # df.NWIS.TP<-readNWISqw(siteNumbers = df.NWIS.TP_sites$site_no, parameterCd = pcode)
 
-# write.csv(df.NWIS.TP, "C:/PhD/CQ/Raw_Data/df.NWIS.TP.csv", row.names=FALSE)
+# write.csv(df.NWIS.TP, "Raw_Data/df.NWIS.TP.csv", row.names=FALSE)
 
-df.NWIS.TP<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.TP.csv", colClasses = c(site_no = "character"))
+df.NWIS.TP<-read.csv("Raw_Data/df.NWIS.TP.csv", colClasses = c(site_no = "character"))
 
 #
 
@@ -205,9 +208,9 @@ df.NWIS.TP_CQ<-left_join(df.NWIS.TP_CQ,temp, by='site_no')%>%
 
 # df.NWIS.TP_site_metadata<-readNWISsite(siteNumbers = unique(df.NWIS.TP_CQ$site_no))
 
-# write.csv(df.NWIS.TP_site_metadata, "C:/PhD/CQ/Raw_Data/df.NWIS.TP_site_metadata.csv", row.names=FALSE)
+# write.csv(df.NWIS.TP_site_metadata, "Raw_Data/df.NWIS.TP_site_metadata.csv", row.names=FALSE)
 
-df.NWIS.TP_site_metadata<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.TP_site_metadata.csv", colClasses = c(site_no = "character"))
+df.NWIS.TP_site_metadata<-read.csv("Raw_Data/df.NWIS.TP_site_metadata.csv", colClasses = c(site_no = "character"))
 
 # then select just the site number and DA column:
 
@@ -579,7 +582,6 @@ unique(temp4$site_no)
 # 42 sites
 
 # save this as the df to move onto future analysis:
-# only keep sites that have 20 or more samples (those in temp1.1$Name)
 
 df.TP_CQ<-temp4
 
@@ -733,7 +735,7 @@ p1<-annotate_figure(p1, top = text_grob("Gauges 2",
                                         color = "red", face = "bold", size = 14))
 # plot:
 
-p1
+# p1
 
 # save(p1, file = 'Processed_Data/p1.Rdata')
 
@@ -787,7 +789,7 @@ make_plot<-function(number){
 
 # use function in lapply (clear plot list first):
 
-lapply(c(1:4), \(i) make_plot(i))
+# lapply(c(1:4), \(i) make_plot(i))
 
 #
 
@@ -854,7 +856,7 @@ p<-df.NLCD06%>%
                      ref.group = "0.5") +
   ggtitle('Adjusted USGS Thresholds using Aggregated Data Layers')
 
-p
+# p
 
 #
 
@@ -951,7 +953,7 @@ p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
     strip.text.x = element_blank()
   )
 
-p
+# p
 
 # looking at this plot I want to add a fourth CQ type for complex, if the slopes of the BP analysis look widely different. 
 # I will start wit hcalcuating the angle between pre-post BP slope and see which sites get signled out:
@@ -981,7 +983,7 @@ p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
     strip.text.x = element_blank()
   )
 
-p
+# p
 
 # based on this plot, I think I need to zoom in on each one:
 
@@ -999,8 +1001,19 @@ p.fun<-function(df){
     ggtitle(df_Seg.2$site[df_Seg.2$n_sample_rank==i])
 }
 
+# use function in lappy to make lots of plots (clear plot list first)
+
 lapply(sort(unique(df_Seg.2$n_sample_rank)), \(i) df_Seg.2%>%filter(n_sample_rank==i)%>%p.fun(.))
 
+# now looking at the expanded plots for each site, I feel that
+# non really could be justified as complex! it feels like the breakpoint
+# analysis lines aren't 'real'
+
+# My first thought is to color the CQ points based on season, AMC, etc
+# this is so overwhleming. 
+
+# I think I'm going to pause here in the analysis, and carry on with the
+# other constituents. Once I have those up to this point I can check in with Chuck and Steve
 
 
 
@@ -1009,8 +1022,7 @@ lapply(sort(unique(df_Seg.2$n_sample_rank)), \(i) df_Seg.2%>%filter(n_sample_ran
 
 
 
-
-I would chose the following sites as complex:
+# I would chose the following sites as complex:
 
 complex_sites<-unique(df_Seg.2$site)[c(3,16,21,22,29,37)] 
 

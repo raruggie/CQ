@@ -258,170 +258,6 @@ df.NWIS.TN_CQ<-left_join(df.NWIS.TN_CQ, df.DA, by = 'site_no')%>%
 
 
 
-#### Fitting Breakpoints to CQ curves #### 
-
-# create empty list to hold the results of the segmented function (which does the breakpoint analysis)
-
-l_Seg<-list()
-
-# create a matrix to hold the results of the davies test, which determines if a two slope model is warrented over a single slope model:
-
-davies.test.matrix<-NULL
-
-# create a new dataframe of only paired CQ observations (such that the breakpoit analysis function runs smoothly) (I didnt want to do this in loop for some reason, I cant remeber why but it wouldnt work):
-
-df.NWIS.TN_CQ_for_BP<-df.NWIS.TN_CQ%>%
-  drop_na(result_va, Q_yield)
-
-# create a vector of ordered unique site names:
-
-temp.loop<-sort(unique(df.NWIS.TN_CQ_for_BP$site_no))
-
-# test i for for loop building:
-
-# i<-4
-
-# loop through the sites:
-
-for (i in seq_along(temp.loop)){
-  
-  tryCatch({
-    
-    # print the site name for loop debugging:
-    
-    print(i)
-    print(temp.loop[i])
-    
-    # create a dataframe that will work with segmented. To do this: 
-      # filter for the site the loop is in
-      # add log transformed C and Q columns, as well as duplicated columns for renamed C and Q
-      # filter for real log C and Q values so breakpoint analysis works smoothly:
-    
-    df<-df.NWIS.TN_CQ_for_BP%>%
-      filter(site_no == temp.loop[i])%>%
-      mutate(log_C = log(result_va), log_Q = log(X_00060_00003), C = result_va, Q = X_00060_00003)%>%
-      filter(is.finite(log_C))%>%
-      filter(is.finite(log_Q))
-    
-    # build a single slope lm for log C and Q. Tis model is also used inthe breakpoint analysis inthenext step:
-    
-    m<-lm(log_C~log_Q, df)
-    
-    # perform breakpoint regression:
-    
-    m_seg<-segmented(obj = m, npsi = 1)
-    
-    # perform davies test for constant linear predictor:
-    # the results are saved as a string with the the site name and true/false:
-    
-    x<-paste(temp.loop[i], '-', davies.test(m)$p.val<0.05)
-    
-    # add the results of davies test to the matrix made prior to this for loop:
-    
-    davies.test.matrix<-c(davies.test.matrix,x)
-    
-    # save the breakpoints
-    
-    bp<-m_seg$psi[1]
-    
-    # save the slopes: To do this:
-    # a conditional statement is needed since sometimes the segmented function wont fit a two slope model at all and will return a object that doesnt work with the slope function used here:
-    
-    if(length(class(m_seg))==2){
-      s<-as.data.frame(slope(m_seg))
-    } else{
-      s<-NA
-    }
-    
-    # get the intercepts (again conditional statement is needed):
-    
-    if(length(class(m_seg))==2){
-      inter<-as.data.frame(intercept(m_seg))
-    } else{
-      inter<-NA
-    }
-    
-    
-    # get the model fitted data and put in a dataframe:
-    
-    fit <- data.frame(Q = df$log_Q, Seg_C = fitted(m_seg))
-    
-    # reformat this dataframe to export out of the loop
-    
-    if(length(class(m_seg))==2){
-      result_df<-fit%>%mutate(site = temp.loop[i], Date = df$sample_dt, n = df$n, Q_real = df$Q, C = df$C, I1 = inter$Est.[1], I2 = inter$Est.[2], Slope1 = s[1,1], Slope2 = s[2,1], BP = bp)
-    } else{
-      result_df<-fit%>%mutate(site = temp.loop[i], Date = df$sample_dt, n = df$n, Q_real = df$Q, C = df$C, I1 = NA, I2 = NA, Slope1 = NA, Slope2 = NA, BP = NA)
-    }
-    
-    l_Seg[[i]]<-result_df
-    
-  }, 
-  
-  error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
-  
-}
-
-# Looking at the davies test results:
-
-davies.test.matrix
-
-# transform this matrix into a two column dataframe for use later with df_Seg and plotting. To do this:
-# separate the matrix into two columns
-# use mutate to remove white space around these character columns:
-
-df.davies<-as.data.frame(davies.test.matrix)%>%
-  separate_wider_delim(1, "-", names = c("site", "BP_yes"))%>%
-  mutate(across(c(1,2), trimws))
-
-# now combine the list of dfs of the breakpoint analysis results (with fitted values, intercepts and slopes) into a single df:
-
-df_Seg<-bind_rows(l_Seg)
-
-# merge this dataframe with the davies test result dfs to add the BP_yes column, use replace and the BP yes column with a conditional statement to set the breakpoint Q and C column rows to NA, as to not plot the segmeneted line if davies test was false:
-
-df_Seg<-df_Seg%>%
-  left_join(., df.davies, by = 'site')%>%
-  mutate(across(c(1,2), ~replace(., BP_yes == 'FALSE', NA)))
-
-# add a column for number of samples:
-
-df_Seg<-left_join(df_Seg, temp[,c(1,3)], by = c('site'='site_no'))%>%
-  arrange(n_sample_rank)
-
-# ready to plot:
-
-# p<-ggplot(df_Seg, aes(x = log(Q_real), y = log(C)))+
-#   geom_point()+
-#   geom_smooth(method = 'lm')+
-#   geom_line(aes(x = Q, y = Seg_C), color = 'tomato')+
-#   facet_wrap(dplyr::vars(n_sample_rank), scales = 'free')+
-#   theme(
-#     strip.background = element_blank(),
-#     strip.text.x = element_blank()
-#   )
-
-# p
-
-
-# one last thing: lets look at a map of these:
-
-# map.NWIS.TN_sites<-df.NWIS.TN_site_metadata%>%
-#   rename(longitude=8,latitude=7)%>%
-#   drop_na(latitude,longitude)%>%
-#   st_as_sf(.,coords=c('longitude','latitude'), crs = 4326)%>%
-#   mutate(site_id= paste(site_no, station_nm), n = NA, .before = 1)%>%
-#   select(c(1:3))
-
-# mapview(map.NWIS.TN_sites)
-
-
-
-
-
-
-
-
 
 
 
@@ -605,6 +441,216 @@ x<-filter(df.NWIS.TN_site_metadata, site_no %in%df.G2$STAID)
 x<-temp2%>%filter(site_no%in% df.G2$STAID)
 
 # 53 sites
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### Export data ####
+
+save(df.TN_CQ,file = 'Processed_Data/TN.Rdata')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### Fitting Breakpoints to CQ curves #### 
+
+# create empty list to hold the results of the segmented function (which does the breakpoint analysis)
+
+l_Seg<-list()
+
+# create a matrix to hold the results of the davies test, which determines if a two slope model is warrented over a single slope model:
+
+davies.test.matrix<-NULL
+
+# create a new dataframe of only paired CQ observations (such that the breakpoit analysis function runs smoothly) (I didnt want to do this in loop for some reason, I cant remeber why but it wouldnt work):
+
+df.TN_CQ_for_BP<-df.TN_CQ%>%
+  drop_na(result_va, Q_yield)
+
+# create a vector of ordered unique site names:
+
+temp.loop<-sort(unique(df.TN_CQ_for_BP$site_no))
+
+# test i for for loop building:
+
+# i<-4
+
+# loop through the sites:
+
+for (i in seq_along(temp.loop)){
+  
+  tryCatch({
+    
+    # print the site name for loop debugging:
+    
+    print(i)
+    print(temp.loop[i])
+    
+    # create a dataframe that will work with segmented. To do this: 
+    # filter for the site the loop is in
+    # add log transformed C and Q columns, as well as duplicated columns for renamed C and Q
+    # filter for real log C and Q values so breakpoint analysis works smoothly:
+    
+    df<-df.TN_CQ_for_BP%>%
+      filter(site_no == temp.loop[i])%>%
+      mutate(log_C = log(result_va), log_Q = log(X_00060_00003), C = result_va, Q = X_00060_00003)%>%
+      filter(is.finite(log_C))%>%
+      filter(is.finite(log_Q))
+    
+    # build a single slope lm for log C and Q. Tis model is also used inthe breakpoint analysis inthenext step:
+    
+    m<-lm(log_C~log_Q, df)
+    
+    # perform breakpoint regression:
+    
+    m_seg<-segmented(obj = m, npsi = 1)
+    
+    # perform davies test for constant linear predictor:
+    # the results are saved as a string with the the site name and true/false:
+    
+    x<-paste(temp.loop[i], '-', davies.test(m)$p.val<0.05)
+    
+    # add the results of davies test to the matrix made prior to this for loop:
+    
+    davies.test.matrix<-c(davies.test.matrix,x)
+    
+    # save the breakpoints
+    
+    bp<-m_seg$psi[1]
+    
+    # save the slopes: To do this:
+    # a conditional statement is needed since sometimes the segmented function wont fit a two slope model at all and will return a object that doesnt work with the slope function used here:
+    
+    if(length(class(m_seg))==2){
+      s<-as.data.frame(slope(m_seg))
+    } else{
+      s<-NA
+    }
+    
+    # get the intercepts (again conditional statement is needed):
+    
+    if(length(class(m_seg))==2){
+      inter<-as.data.frame(intercept(m_seg))
+    } else{
+      inter<-NA
+    }
+    
+    
+    # get the model fitted data and put in a dataframe:
+    
+    fit <- data.frame(Q = df$log_Q, Seg_C = fitted(m_seg))
+    
+    # reformat this dataframe to export out of the loop
+    
+    if(length(class(m_seg))==2){
+      result_df<-fit%>%mutate(site = temp.loop[i], Date = df$sample_dt, n = df$n, Q_real = df$Q, C = df$C, I1 = inter$Est.[1], I2 = inter$Est.[2], Slope1 = s[1,1], Slope2 = s[2,1], BP = bp)
+    } else{
+      result_df<-fit%>%mutate(site = temp.loop[i], Date = df$sample_dt, n = df$n, Q_real = df$Q, C = df$C, I1 = NA, I2 = NA, Slope1 = NA, Slope2 = NA, BP = NA)
+    }
+    
+    l_Seg[[i]]<-result_df
+    
+  }, 
+  
+  error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
+  
+}
+
+# Looking at the davies test results:
+
+davies.test.matrix
+
+# transform this matrix into a two column dataframe for use later with df_Seg and plotting. To do this:
+# separate the matrix into two columns
+# use mutate to remove white space around these character columns:
+
+df.davies<-as.data.frame(davies.test.matrix)%>%
+  separate_wider_delim(1, "-", names = c("site", "BP_yes"))%>%
+  mutate(across(c(1,2), trimws))
+
+# now combine the list of dfs of the breakpoint analysis results (with fitted values, intercepts and slopes) into a single df:
+
+df_Seg<-bind_rows(l_Seg)
+
+# merge this dataframe with the davies test result dfs to add the BP_yes column, use replace and the BP yes column with a conditional statement to set the breakpoint Q and C column rows to NA, as to not plot the segmeneted line if davies test was false:
+
+df_Seg<-df_Seg%>%
+  left_join(., df.davies, by = 'site')%>%
+  mutate(across(c(1,2), ~replace(., BP_yes == 'FALSE', NA)))
+
+# add a column for number of samples:
+
+df_Seg<-left_join(df_Seg, temp[,c(1,3)], by = c('site'='site_no'))%>%
+  arrange(n_sample_rank)
+
+# ready to plot:
+
+# p<-ggplot(df_Seg, aes(x = log(Q_real), y = log(C)))+
+#   geom_point()+
+#   geom_smooth(method = 'lm')+
+#   geom_line(aes(x = Q, y = Seg_C), color = 'tomato')+
+#   facet_wrap(dplyr::vars(n_sample_rank), scales = 'free')+
+#   theme(
+#     strip.background = element_blank(),
+#     strip.text.x = element_blank()
+#   )
+
+# p
+
+
+# one last thing: lets look at a map of these:
+
+# map.NWIS.TN_sites<-df.NWIS.TN_site_metadata%>%
+#   rename(longitude=8,latitude=7)%>%
+#   drop_na(latitude,longitude)%>%
+#   st_as_sf(.,coords=c('longitude','latitude'), crs = 4326)%>%
+#   mutate(site_id= paste(site_no, station_nm), n = NA, .before = 1)%>%
+#   select(c(1:3))
+
+# mapview(map.NWIS.TN_sites)
+
+
+
+
+
 
 
 
@@ -843,7 +889,11 @@ df.NLCD06<-df.NLCD06%>%
   mutate(USGS.LU.Adjusted = case_when(.default = 'Mixed',
                                       PLANTNLCD06 > 30 & DEVNLCD06 <= 10 ~ 'Agriculture',
                                       DEVNLCD06 > 10 & PLANTNLCD06 <= 30 ~ 'Urban',
-                                      DEVNLCD06 <= 10 & PLANTNLCD06 <= 10 ~ 'Undeveloped'))
+                                      DEVNLCD06+PLANTNLCD06 <= 10 ~ 'Undeveloped'))
+
+# frequency table:
+
+table(df.NLCD06$USGS.LU.Adjusted)
 
 # boxplots of
 
@@ -955,15 +1005,19 @@ p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
     strip.text.x = element_blank()
   )
 
-p
+# p
 
 # looking at this plot I want to add a fourth CQ type for complex, if the slopes of the BP analysis look widely different. 
-# I will start wit hcalcuating the angle between pre-post BP slope and see which sites get signled out:
+# I will start with calcuating the angle between pre-post BP slope and see which sites get signled out:
 
 # add a new column with the angle between the two lines:
 
 df_Seg.2<-df_Seg.2%>%
   mutate(slope_angle=factor(round(atan(abs((Slope2-Slope1)/(1+(Slope2*Slope1)))),1)))
+
+# I want to add land use as color as well. Merge the plotting df with the land use df:
+
+df_Seg.2<-left_join(df_Seg.2, df.NLCD06%>%select(Name, USGS.LU.Adjusted), by = c('site'='Name'))
 
 # create color pallete for the slope angle:
 
@@ -983,9 +1037,12 @@ p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
   theme(
     strip.background = element_blank(),
     strip.text.x = element_blank()
-  )
+  )+
+  geom_rect(data = df_Seg.2%>%distinct(df_Seg.2$site, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, fill = USGS.LU.Adjusted), alpha = .35)+
+  scale_fill_manual(name = "USGS Landuse\n(Adjusted)", values = c("red", "blue","yellow", "green"))
 
-# p
+
+p
 
 # based on this plot, I think I need to zoom in on each one:
 

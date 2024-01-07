@@ -54,7 +54,7 @@ source("Code/Ryan_functions.R")
 
 pcode<-'00666' 
 
-
+ncode<-'TDP'
 
 
 
@@ -346,11 +346,11 @@ m
 # the first filter is to remove data points and thus potentially entire sites
 # that are prior to 2000:
 
-temp1<-df.NWIS.TDP_CQ%>%filter(sample_dt >= 2001)
+temp1<-df.NWIS.TDP_CQ%>%filter(sample_dt >= as.Date('2001-01-10'))
 
 unique(temp1$site_no)
 
-# 61 sites, BUT:
+# 33 sites, BUT:
 
 # how many of these sites have 20 paired CQ observations?
 
@@ -365,7 +365,7 @@ temp1.1<-temp1%>%
 
 dim(temp1.1)[1] 
 
-# only 52
+# only 25
 
 # reduce temp1 to these sites:
 
@@ -382,7 +382,7 @@ temp3<-temp1%>%filter(site_no %in% temp2$site_no)
 
 unique(temp3$site_no)
 
-# 45 sites
+# 24 sites
 
 # the last filter is gauges 2:
 
@@ -412,11 +412,12 @@ temp4<-temp3%>%filter(site_no %in% df.G2$STAID)
 
 unique(temp4$site_no)
 
-# 32 sites
+# 18 sites
 
 # save this as the df to move onto future analysis:
+# need to alsoremove samples after 2001:
 
-df.TDP_CQ<-temp4
+df.TDP_CQ<-temp4%>%filter(sample_dt >= as.Date('2001-01-10'))
 
 # map:
 
@@ -462,7 +463,7 @@ x<-temp2%>%filter(site_no%in% df.G2$STAID)
 
 #### Export data ####
 
-save(df.TDP_CQ,file = 'Processed_Data/TDP.Rdata')
+# save(df.TDP_CQ,file = 'Processed_Data/TDP.Rdata')
 
 
 
@@ -670,6 +671,94 @@ df_Seg<-left_join(df_Seg, temp[,c(1,3)], by = c('site'='site_no'))%>%
 
 
 
+
+
+#### Calculating Average Annual Consituent Yield ####
+# (for use in correlaitons and MLR)
+
+# step 1. calcualte average annual hydrograph for each site. to do this:
+
+# filter the daily flow records to just the sites used:
+
+l.avg_ann_hydro<-df.NWIS.Q.for_TDP%>%filter(site_no %in% df.TDP_CQ$site_no)
+
+# split the daily flow records into list of dfs
+
+l.avg_ann_hydro<-split(l.avg_ann_hydro, f = l.avg_ann_hydro$site_no)
+
+# strip out year from date (just converts it to 2023) for each dataframe, then group by and summarize to get mean annual flow for each day of calendar year:
+
+l.avg_ann_hydro<-lapply(l.avg_ann_hydro, \(i) i%>%mutate(Date = as.Date(Date))%>%mutate(year = year(Date), Date = as.Date(format(Date, "%m-%d"), "%m-%d"))%>%group_by(Date)%>%summarize(mean_Q = mean(X_00060_00003, na.rm= T)))
+
+# step 2. predict C for each of day of the year using the mean flow rate for each site in the list:todothis:
+
+# create a list of linear model objects for each sites CQ relaitonship:
+
+l.C_daily<-df.TDP_CQ%>%
+  rename(Name = site_no)%>%
+  select(Name, sample_dt,result_va, X_00060_00003)%>%mutate(log_C = log(result_va), log_Q = log(X_00060_00003), C = result_va, Q = X_00060_00003)%>%
+  filter(is.finite(log_C))%>%
+  filter(is.finite(log_Q))%>%
+  split(., f =.$Name)%>%
+  lapply(., \(i) lm(log_C ~ log_Q, i))
+
+# make sure the order of the sites in the flow and lm lists are the same:
+
+names(l.C_daily)==names(l.avg_ann_hydro)
+
+# use this list to create list of bias correction factors:
+
+l.BCF<-lapply(l.C_daily, \(i) exp((summary(i)$sigma^2)/2))
+
+# predict the concentration for each day for each site: this predicts the concnetration in log space, so transforming into real space here as well using BCF:
+
+l.C_daily<-lapply(names(l.C_daily), \(i) l.BCF[[i]]*exp(as.numeric(predict(l.C_daily[[i]], data.frame(log_Q = log(l.avg_ann_hydro[[i]]$mean_Q) ) ) ) ) )%>%purrr::set_names(names(l.avg_ann_hydro))
+
+# step 3. multiply predicted average daily C by daily Q to get daily load, sum up, then convert to yield. To do this:
+
+# save just the daily Q:
+
+l.Q.temp<-lapply(l.avg_ann_hydro, \(i) i$mean_Q)
+
+# set up list of drainage areas:
+
+l.DA<-readNWISsite(siteNumbers = names(l.C_daily))%>%select(site_no, drain_area_va)%>%split(., .$site_no)%>%lapply(., \(i) i$drain_area_va)
+
+# multiply daily C by daily Q and convert units:
+# mg/L * ft^3/sec * 28.3168 L/ft3 * 86400 sec /day * 1g/1000mg * 1kg/1000g * 1/mi^2 * 1mi^2/258.999 ha = kg/ha/day
+
+unit_conversion=28.3168*86400*(1/1000)*(1/1000)*(1/258.999)
+
+l.Yield<-lapply(names(l.C_daily), \(i) l.C_daily[[i]]*l.Q.temp[[i]]*(1/l.DA[[i]])*unit_conversion)%>%purrr::set_names(names(l.avg_ann_hydro))
+
+# sum up for the year and convert to df
+
+df.Yield <- lapply(l.Yield, sum)%>%dplyr::bind_rows(., .id = 'Name')%>%pivot_longer(cols = everything(), names_to = 'Name', values_to = 'Yield') # units of kg/ha/year
+
+#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #####################################################
 #### Correlations ####
 #####################################################
@@ -690,7 +779,7 @@ pred_to_keep<-c("HYDRO_DISTURB_INDX",
                 temp1
 )
 
-# removing duplicates of STADID:
+# removing 'STADID':
 
 pred_to_keep <- pred_to_keep[!(pred_to_keep %in% "STAID")]
 
@@ -729,6 +818,10 @@ df.Sens<-df.Correlation%>%
 
 df.OLS_Sens<-left_join(df.OLS, df.Sens, by = 'Name')
 
+# merge constiuent yield:
+
+df.OLS_Sens<-left_join(df.OLS_Sens, df.Yield, by = 'Name')
+
 # merge back the watershed characteristic data to this dataframe:
 
 df.OLS_Sens<-left_join(df.OLS_Sens, df.G2.reduced, by = c('Name'='STAID'))
@@ -739,17 +832,34 @@ df.OLS_Sens<-left_join(df.OLS_Sens, df.G2.reduced, by = c('Name'='STAID'))
 
 n_sites<-dim(df.OLS_Sens)[1] 
 
-# use the corrr package to correlate() and focus() on your variable of choice
+# use the corrr package to correlate() and focus() on your variable of choice.
 
 df.cor <- df.OLS_Sens %>% 
   correlate(method = 'spearman') %>%
-  focus(c(OLS.I, OLS.S, Sen.I, Sen.S))%>%
-  pivot_longer(cols= c(2:5), names_to = 'CQ_Parameter', values_to = 'Spearman_Correlation')%>%
+  focus(c(OLS.I, OLS.S, Sen.I, Sen.S, Yield))%>%
+  pivot_longer(cols= c(2:6), names_to = 'CQ_Parameter', values_to = 'Spearman_Correlation')%>%
   mutate(p_val = round(2*pt(-abs(Spearman_Correlation*sqrt((n_sites-2)/(1-(Spearman_Correlation)^2))), n_sites-2),2))%>%
   mutate(sig_0.05 = ifelse(p_val <= 0.05, 'sig', 'not'))%>%
   drop_na(p_val) # some standard deviaitons return NA because the watershed characteristic values are zero
 
-# then plot results: todo this:
+# I also want to try standardizing the predictors:
+
+df.cor.0to1<-df.OLS_Sens %>% 
+  mutate(across(7:last_col(), ~ (.-min(.))/(max(.)-min(.))))%>% # could add term: .names = "{.col}_standarized")
+  correlate(method = 'spearman') %>%
+  focus(c(OLS.I, OLS.S, Sen.I, Sen.S, Yield))%>%
+  pivot_longer(cols= c(2:6), names_to = 'CQ_Parameter', values_to = 'Spearman_Correlation')%>%
+  mutate(p_val = round(2*pt(-abs(Spearman_Correlation*sqrt((n_sites-2)/(1-(Spearman_Correlation)^2))), n_sites-2),2))%>%
+  mutate(sig_0.05 = ifelse(p_val <= 0.05, 'sig', 'not'))%>%
+  drop_na(p_val) # some standard deviaitons return NA because the watershed characteristic values are zero
+
+# looking at the regualr and 0 to 1 standarized spearman correlaitons, they are the same
+
+df.cor$Spearman_Correlation==df.cor.0to1$Spearman_Correlation
+
+# so not going to proceed with 0 to 1
+
+# then plot results: to do this:
 
 # create a list of each CQ parameter (4: OLS and Sens slope and intercept)and format it for ggplotting:
 
@@ -767,7 +877,7 @@ l.cor<-df.cor %>%
 
 plist<-lapply(l.cor, \(i) i%>%ggplot(aes(x = term, y = Spearman_Correlation, color = sig_0.05)) +
                 geom_bar(stat = "identity") +
-                scale_color_manual(values = c("not" = "red", "sig" = "blue"),na.value = NA)+
+                scale_color_manual(values = c("not" = "red", "sig" = "blue"),na.value = NA, drop = FALSE)+
                 facet_wrap('CQ_Parameter')+
                 ylab(paste('Spearman Correlation')) +
                 xlab("Watershed Attribute")+
@@ -776,15 +886,15 @@ plist<-lapply(l.cor, \(i) i%>%ggplot(aes(x = term, y = Spearman_Correlation, col
 
 # arrange plots:
 
-p1<-ggpubr::ggarrange(plotlist = plist, ncol=2, nrow=2, common.legend = TRUE, legend="bottom")
+p1<-ggpubr::ggarrange(plotlist = plist, ncol=3, nrow=2, common.legend = TRUE, legend="bottom")
 
 # add title:
 
-p1<-annotate_figure(p1, top = text_grob("Gauges 2", 
+p1<-annotate_figure(p1, top = text_grob(paste(ncode, "Correlated Against Gauges 2"),
                                         color = "red", face = "bold", size = 14))
 # plot:
 
-p1 # running this with the 12 sites for TDP is not resulting in signfincant pvalues even though spearman correlaitons are -0.5!
+p1
 
 # save(p1, file = 'Processed_Data/p1.Rdata')
 
@@ -797,12 +907,13 @@ p1 # running this with the 12 sites for TDP is not resulting in signfincant pval
 
 OLS<-l.cor[[1]]%>%arrange(desc(Spearman_Correlation))
 
-# make univariate plots (facets) of different land uses and OLS slopes:
+# make univariate plots (facets) of Y (determined in [[]]) above and predictors: 
 # note the predictor column isturned into an ordered factor based on thespearman correlation values
 # to makethe facet plots in order:
 
-df.OLS%>%left_join(.,df.G2%>%select(c(STAID, OLS$term)), by = c('Name'='STAID'))%>%
-  pivot_longer(cols = c(4:last_col()), names_to = 'Type', values_to = 'Value')%>%
+df.OLS_Sens%>%
+  select(Name, OLS$CQ_Parameter[1], OLS$term)%>%
+  pivot_longer(cols = c(3:last_col()), names_to = 'Type', values_to = 'Value')%>%
   drop_na(Value)%>%
   # mutate_if(is.numeric, ~replace(., . == 0, NA))%>%
   left_join(., OLS%>%select(term, Spearman_Correlation), by = c('Type'='term'))%>%
@@ -811,36 +922,52 @@ df.OLS%>%left_join(.,df.G2%>%select(c(STAID, OLS$term)), by = c('Name'='STAID'))
   geom_smooth(method = 'lm')+
   geom_point()+
   facet_wrap('Type', scales = 'free')+
-  ggtitle(paste('Gauges 2:', OLS$CQ_Parameter[1]))
+  ggtitle(paste('Univariate plots of', OLS$CQ_Parameter[1], 'against Top Gauges 2 Correlates for', OLS$CQ_Parameter[1], 'ordered from highest to lowest Spearman Rank Correlation' ))
 
 # create a function to use lapply to plot all 4 univariate sets:
 
-number<-3
+# number<-5
 
 make_plot<-function(number){
   
   OLS<-l.cor[[number]]%>%arrange(desc(Spearman_Correlation))
   
-  x<-df.OLS_Sens[,c(1:5)]%>%left_join(.,df.G2%>%select(c(STAID, OLS$term)), by = c('Name'='STAID'))%>%
-    pivot_longer(cols = c(6:last_col()), names_to = 'Type', values_to = 'Value')%>%
+  x<-df.OLS_Sens%>%
+    select(Name, OLS$CQ_Parameter[1], OLS$term)%>%
+    pivot_longer(cols = c(3:last_col()), names_to = 'Type', values_to = 'Value')%>%
     drop_na(Value)%>%
     # mutate_if(is.numeric, ~replace(., . == 0, NA))%>%
     left_join(., OLS%>%select(term, Spearman_Correlation), by = c('Type'='term'))%>%
-    mutate(Type = factor(Type, levels=unique(Type[order(-Spearman_Correlation,Type)]), ordered=TRUE))
-  
-  ggplot(x, aes(x = Value, y = !!sym(OLS$CQ_Parameter[number])))+
+    mutate(Type = factor(Type, levels=unique(Type[order(-Spearman_Correlation,Type)]), ordered=TRUE))%>%
+    ggplot(., aes(x = Value, y = !!sym(OLS$CQ_Parameter[1])))+
     geom_smooth(method = 'lm')+
     geom_point()+
     facet_wrap('Type', scales = 'free')+
-    ggtitle(paste('Gauges 2:', OLS$CQ_Parameter[number]))
+    ggtitle(paste('Univariate plots of', OLS$CQ_Parameter[1], 'against Top Gauges 2 Correlates for', OLS$CQ_Parameter[1], 'ordered from highest to lowest Spearman Rank Correlation' ))
+  
+  x
   
 }
 
 # use function in lapply (clear plot list first):
 
-# lapply(c(1:4), \(i) make_plot(i))
+# lapply(c(1:5), \(i) make_plot(i))
 
 #
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1030,6 +1157,7 @@ p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
   geom_point(aes(color = Type))+
   scale_color_manual(name = "CQ Type", values = c("red", "blue", "green"))+
   geom_smooth(method = 'lm')+
+  ylab('log(TDP')+
   new_scale_color() +
   geom_line(aes(x = Q, y = Seg_C), size = 2.5, color = 'black')+
   geom_line(aes(x = Q, y = Seg_C, color = slope_angle), size = 2)+
@@ -1045,33 +1173,88 @@ p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
 
 p
 
-# based on this plot, I think I need to zoom in on each one:
+# export df_Seg.2:
 
-# create a plotting function for each site:
+# save(df_Seg.2, file = 'Processed_Data/TDP.df_Seg.2.Rdata')
 
-p.fun<-function(df){
-  ggplot(df, aes(x = log(Q_real), y = log(C)))+
-    geom_point(aes(color = Type))+
-    scale_color_manual(name = "CQ Type", values = c("red", "blue", "green"))+
-    geom_smooth(method = 'lm')+
-    new_scale_color() +
-    geom_line(aes(x = Q, y = Seg_C), size = 2.5, color = 'black')+
-    geom_line(aes(x = Q, y = Seg_C, color = slope_angle), size = 2)+
-    scale_color_manual(name = "Slope Angle", values = hc)+
-    ggtitle(df_Seg.2$site[df_Seg.2$n_sample_rank==i])
-}
+# # based on this plot, I think I need to zoom in on each one:
+# 
+# # create a plotting function for each site:
+# 
+# p.fun<-function(df){
+#   ggplot(df, aes(x = log(Q_real), y = log(C)))+
+#     geom_point(aes(color = Type))+
+#     scale_color_manual(name = "CQ Type", values = c("red", "blue", "green"))+
+#     geom_smooth(method = 'lm')+
+#     new_scale_color() +
+#     geom_line(aes(x = Q, y = Seg_C), size = 2.5, color = 'black')+
+#     geom_line(aes(x = Q, y = Seg_C, color = slope_angle), size = 2)+
+#     scale_color_manual(name = "Slope Angle", values = hc)+
+#     ggtitle(df_Seg.2$site[df_Seg.2$n_sample_rank==i])
+# }
+# 
+# # use function in lappy to make lots of plots (clear plot list first)
+# 
+# lapply(sort(unique(df_Seg.2$n_sample_rank)), \(i) df_Seg.2%>%filter(n_sample_rank==i)%>%p.fun(.))
+# 
+# # now looking at the expanded plots for each site, I feel that
+# # non really could be justified as complex! it feels like the breakpoint
+# # analysis lines aren't 'real'
+# 
+# # My first thought is to color the CQ points based on season, AMC, etc
+# # this is so overwhleming. 
+# 
+# # I think I'm going to pause here in the analysis, and carry on with the
+# # other constituents. Once I have those up to this point I can check in with Chuck and Steve
 
-# use function in lappy to make lots of plots (clear plot list first)
 
-lapply(sort(unique(df_Seg.2$n_sample_rank)), \(i) df_Seg.2%>%filter(n_sample_rank==i)%>%p.fun(.))
 
-# now looking at the expanded plots for each site, I feel that
-# non really could be justified as complex! it feels like the breakpoint
-# analysis lines aren't 'real'
 
-# My first thought is to color the CQ points based on season, AMC, etc
-# this is so overwhleming. 
 
-# I think I'm going to pause here in the analysis, and carry on with the
-# other constituents. Once I have those up to this point I can check in with Chuck and Steve
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### Steve's Idea: triangle CQ plot ####
+
+# set up dataframe:
+
+# add percent ag and urban to df.lm:
+
+df.tri<-left_join(df.lm, df.NLCD06%>%select(Name, DEVNLCD06, PLANTNLCD06), by = c('site_no'='Name'))%>%select(site_no, Slope, Type, DEVNLCD06, PLANTNLCD06)%>%mutate(Slope = round(Slope, 2), DEVNLCD06=round(DEVNLCD06, 2), PLANTNLCD06=round(PLANTNLCD06, 2))
+
+# create plot:
+
+p<-ggplot(df.tri, aes(x=DEVNLCD06, y=PLANTNLCD06)) +
+  geom_point(aes(shape=as.factor(Type), fill=abs(Slope)), size = 4) +
+  scale_shape_manual(values = c("Mobilization" = 24, "Dilution" = 25, "Stationary" = 22),
+                     guide = guide_legend(override.aes = list(fill = "pink")))+
+  scale_fill_gradient(low = "yellow", high = "red")+
+  xlab('Percent Developed')+
+  ylab('Percent Agriculture')+
+  ggtitle(paste(ncode, 'CQ type and slope magnitude as a function of percent Ag and Developed Land'))
+
+p$labels$fill <- "Slope Magnitude"
+p$labels$shape <- "CQ Type"
+
+p
+
+
+#
 

@@ -1,0 +1,965 @@
+<?xml version="1.0" encoding="UTF-8"?><metadata>
+    <idinfo>
+        <citation>
+            <citeinfo>
+                <origin/>
+                <title>State Pollutant Discharge Elimination System - New York State (NYSDEC)</title>
+                <geoform>vector digital data</geoform>
+            </citeinfo>
+        </citation>
+        <descript>
+            <abstract>The purpose of the State Pollutant Discharge Elimination System (SPDES) Program is to protect human health and the environment. The SPDES permit program in the New York State Department of Environmental Conservation's Division of Water regulates municipal, industrial, private, commercial and institutional wastewater treatment facilities that discharge to the groundwaters as well as surface waters of New York State.Service layer is updated as needed and was last updated August 2022.For more information or to download layer see http://gis.ny.gov/gisdata/inventories/details.cfm?DSID=1010Download the metadata to learn more information about how the data was created and details about the attributes. Use the links within the metadata document to expand the sections of interest. http://gis.ny.gov/gisdata/metadata/nysdec.spdes.xml1. The NYS DEC asks to be credited in derived products. 2. Secondary Distribution of the data is not allowed. 3. Any documentation provided is an integral part of the data set. Failure to use the documentation in conjunction with the digital data constitutes misuse of the data. 4. Although every effort has been made to ensure the accuracy of information, errors may be reflected in the data supplied. The user must be aware of data conditions and bear responsibility for the appropriate use of the information with respect to possible errors, original map scale, collection methodology, currency of data, and other conditions.</abstract>
+            <purpose>State Pollutant Discharge Elimination System (SPDES)</purpose>
+            <supplinf>Wastewater treatment facilities (also called "point sources") are issued SPDES permits regulating their discharge. "Point sources" means discrete conveyances such as pipes or man made ditches. These facilities are municipal, industrial or larger private, commercial, institutional (i.e. shopping malls, restaurants, hospitals, correctional facilities, trailer parks, etc) waste water treatment plants.</supplinf>
+        </descript>
+        <timeperd>
+            <timeinfo>
+                <rngdates>
+                    <begdate>20180323</begdate>
+                    <enddate>present</enddate>
+                </rngdates>
+            </timeinfo>
+            <current>publication date</current>
+        </timeperd>
+        <status>
+            <progress>In work</progress>
+            <update>Daily</update>
+        </status>
+        <spdom>
+            <bounding>
+                <westbc>-79.979229</westbc>
+                <eastbc>-71.656483</eastbc>
+                <northbc>45.008746</northbc>
+                <southbc>40.432939</southbc>
+            </bounding>
+        </spdom>
+        <keywords>
+            <theme>
+                <themekt>ISO 19115 Topic Category</themekt>
+                <themekey>inlandWaters</themekey>
+                <themekey>012</themekey>
+                <themekey>utilitiesCommunication</themekey>
+                <themekey>019</themekey>
+                <themekey>environment</themekey>
+                <themekey>007</themekey>
+                <themekey>oceans</themekey>
+                <themekey>014</themekey>
+                <themekey>health</themekey>
+                <themekey>009</themekey>
+            </theme>
+            <theme>
+                <themekt>None</themekt>
+                <themekey>SPDES</themekey>
+                <themekey>custodial</themekey>
+                <themekey>pollutant</themekey>
+                <themekey>water quality</themekey>
+                <themekey>pollution</themekey>
+            </theme>
+            <place>
+                <placekt>Geographic Names Information System http://geonames.usgs.gov/pls/gnispublic</placekt>
+                <placekey>New York State</placekey>
+            </place>
+        </keywords>
+        <accconst>Contact the New York State Department of Environmental Conservation, Division of Water, Bureau of Water Compliance.</accconst>
+        <useconst>1. The NYS DEC asks to be credited in derived products. 2. Secondary Distribution of the data is not allowed. 3. Any documentation provided is an integral part of the data set. Failure to use the documentation in conjunction with the digital data constitutes misuse of the data. 4. Although every effort has been made to ensure the accuracy of information, errors may be reflected in the data supplied. The user must be aware of data conditions and bear responsibility for the appropriate use of the information with respect to possible errors, original map scale, collection methodology, currency of data, and other conditions.</useconst>
+        <ptcontac>
+            <cntinfo>
+                <cntorgp>
+                    <cntorg>New York State Department of Environmental Conservation</cntorg>
+                    <cntper>Division of Water; Bureau of Water Compliance</cntper>
+                </cntorgp>
+                <cntaddr>
+                    <addrtype>mailing and physical</addrtype>
+                    <address>625 Broadway</address>
+                    <address>4th floor</address>
+                    <city>Albany</city>
+                    <state>NY</state>
+                    <postal>12233-3506</postal>
+                    <country>US</country>
+                </cntaddr>
+                <cntvoice>(518) 402-8177</cntvoice>
+                <cntfax>(518) 402-8082</cntfax>
+                <cntemail>dowinfo@gw.dec.state.ny.us</cntemail>
+            </cntinfo>
+        </ptcontac>
+        <datacred>New York State Department of Environmental Conservation, Division of Water, Bureau of Water Compliance</datacred>
+        <secinfo>
+            <secsys>None</secsys>
+            <secclass>Unclassified</secclass>
+            <sechandl>None</sechandl>
+        </secinfo>
+        <native> Version 6.2 (Build 9200) ; Esri ArcGIS 10.7.1.11595</native>
+    </idinfo>
+    <dataqual>
+        <attracc>
+            <attraccr>NYSDEC Division of Water, Bureau of Water Compliance</attraccr>
+        </attracc>
+        <logic>NYSDEC Division of Water, Bureau of Water Compliance</logic>
+        <complete>NYSDEC Division of Water, Bureau of Water Compliance</complete>
+        <lineage>
+            <procstep>
+                <procdesc>A SQL query was used to generate a view of the SPDES enterprise database.for facilities with coordinates.</procdesc>
+                <procdate>unknown</procdate>
+                <proccont>
+                    <cntinfo>
+                        <cntorgp>
+                            <cntorg>NYS Office of IT Services, Environment Portfolio</cntorg>
+                        </cntorgp>
+                        <cntpos>Database Administration</cntpos>
+                        <cntaddr>
+                            <addrtype>mailing and physical</addrtype>
+                            <address>625 Broadway, 3rd floor</address>
+                            <city>Albany</city>
+                            <state>NY</state>
+                            <postal>12233-2750</postal>
+                        </cntaddr>
+                        <cntvoice>518-402-9860</cntvoice>
+                        <cntemail>EnterpriseGIS@dec.ny.gov</cntemail>
+                    </cntinfo>
+                </proccont>
+            </procstep>
+            <procstep>
+                <procdesc>A Python script converts the SPDES database view to a temporary SDE table to either update the current SPDES SDE feature class or create a new feature class: 1. Copy Rows from SPDES database view with coordinates into temporary SDE Table. 2. Create Table View of input_table_coord and create XY Event Layer from Table View. 3. Create temporary Geographic Coordinate System feature class from XY Event Layer and define Coordinate System of tmp_dow_spdes_GCS as GCS_North_American_1983. 4. Project tmp_dow_spdes_GCS Feature Class to UTM Nad 83 Zone 18N in tmp_dow_spdes_UTM Feature Class. 5. Add UTM_East and UTM_North fields to attribute table of tmp_dow_spdes_UTM Feature Class. 6. If working SPDES feature class exists in SDE: (a) make backup feature class; (b) delete features from existing SDE feature class; and (c) append new features from tmp_dow_spdes_UTM into blank working feature class, 7. If working SDE feature class doesn't exist, create a new one from temp feature class tmp_dow_spdes_UTM and import metadata.</procdesc>
+                <procdate>unknown</procdate>
+                <proccont>
+                    <cntinfo>
+                        <cntorgp>
+                            <cntorg>NYS Office of IT Services, Environment Portfolio</cntorg>
+                        </cntorgp>
+                        <cntpos>GeoSpatial Technology Section</cntpos>
+                        <cntaddr>
+                            <addrtype>mailing and physical</addrtype>
+                            <address>625 Broadway, 3rd floor</address>
+                            <city>Albany</city>
+                            <state>NY</state>
+                            <postal>12233-2750</postal>
+                        </cntaddr>
+                        <cntvoice>518-402-9860</cntvoice>
+                        <cntfax>518-402-9031</cntfax>
+                        <cntemail>EnterpriseGIS@dec.ny.gov</cntemail>
+                    </cntinfo>
+                </proccont>
+            </procstep>
+        </lineage>
+    </dataqual>
+    <spdoinfo>
+        <direct>Vector</direct>
+        <ptvctinf>
+            <sdtsterm>
+                <sdtstype>Entity point</sdtstype>
+                <ptvctcnt>6354</ptvctcnt>
+            </sdtsterm>
+        </ptvctinf>
+    </spdoinfo>
+    <eainfo xmlns:fn="http://www.w3.org/2005/xpath-functions" xmlns:xdt="http://www.w3.org/2005/xpath-datatypes" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <detailed>
+            <enttyp>
+                <enttypl>GISCREATOR.dow_spdes</enttypl>
+                <enttypd>SDE feature class of SPDES permited facilities with coordinates, and table of SPDES facilities without coordinates.</enttypd>
+                <enttypds>NYSDEC Division of Water</enttypds>
+            </enttyp>
+            <attr>
+                <attrlabl>OBJECTID</attrlabl>
+                <attrdef>Internal feature number.</attrdef>
+                <attrdefs>Esri</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Sequential unique whole numbers that are automatically generated.</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>SPDES_PERMIT_NUM</attrlabl>
+                <attrdef>SPDES Permit Number</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>SPDES Permit Number</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>DEC_ID</attrlabl>
+                <attrdef>Facility identifier used in the Facility Information System (FIS).</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Facility identifier used in the Facility Information System</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>SPDES_HISTORY_FACILITY_CLASS</attrlabl>
+                <attrdef>Classification of facility holding SPDES permit</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>01</edomv>
+                                                
+                        <edomvd>State Significant Industrial</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>02</edomv>
+                                                
+                        <edomvd>Non-significant Private/Commercial/Institutional</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>03</edomv>
+                                                
+                        <edomvd>EPA Major Industrial</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>04</edomv>
+                                                
+                        <edomvd>Non-significant Industrial</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>05</edomv>
+                                                
+                        <edomvd>EPA Major Municipal</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>07</edomv>
+                                                
+                        <edomvd>State Significant Municipal</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>09</edomv>
+                                                
+                        <edomvd>State Significant Private/Commercial/Institutional</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>10</edomv>
+                                                
+                        <edomvd>Petroleum Remediation</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>11</edomv>
+                                                
+                        <edomvd>Construction Stormwater</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>12</edomv>
+                                                
+                        <edomvd>Multi-Sector General Permit</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>14</edomv>
+                                                
+                        <edomvd>Combined Animal Feeding Operation Clean Water Act Large</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>15</edomv>
+                                                
+                        <edomvd>Combined Animal Feeding Operation Clean Water Act Medium</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>16</edomv>
+                                                
+                        <edomvd>Municipal Separate Storm Sewer System</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>17</edomv>
+                                                
+                        <edomvd>Private/Commercial/Institutional Groundwater General Permit</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>18</edomv>
+                                                
+                        <edomvd>Combined Animal Feeding Operation, NYS Environmental Conservation Law, Large</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>19</edomv>
+                                                
+                        <edomvd>Combined Animal Feeding Operation, NYS Environmental Conservation Law, Medium</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>20</edomv>
+                                                
+                        <edomvd>Pesticide General Permit</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>WCS_CLASS</attrlabl>
+                <attrdef>Water Compliance System Class of facility</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>01</edomv>
+                                                
+                        <edomvd>State Significant Industrial</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>02</edomv>
+                                                
+                        <edomvd>Non-significant Private/Commercial/Institutional</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>03</edomv>
+                                                
+                        <edomvd>EPA Major Industrial</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>04</edomv>
+                                                
+                        <edomvd>Non-significant Industrial</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>05</edomv>
+                                                
+                        <edomvd>EPA Major Municipal</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>07</edomv>
+                                                
+                        <edomvd>State Significant Municipal</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>09</edomv>
+                                                
+                        <edomvd>State Significant Private/Commercial/Institutional</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>10</edomv>
+                                                
+                        <edomvd>Petroleum Remediation</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>11</edomv>
+                                                
+                        <edomvd>Construction Stormwater</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>12</edomv>
+                                                
+                        <edomvd>Multi-Sector General Permit</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>14</edomv>
+                                                
+                        <edomvd>Concentrated Animal Feeding Operation, Clean Water Act, Large</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>15</edomv>
+                                                
+                        <edomvd>Concentrated Animal Feeding Operation, Clean Water Act, Medium</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>16</edomv>
+                                                
+                        <edomvd>Municipal Separate Storm Sewer System</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>17</edomv>
+                                                
+                        <edomvd>Private/Commercial/Institutional Groundwater General Permit</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>18</edomv>
+                                                
+                        <edomvd>Concentrated Animal Feeding Operation, NYS Environmental Conservation Law, Large</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>19</edomv>
+                                                
+                        <edomvd>Concentrated Animal Feeding Operation, NYS Environmental Conservation Law, Medium</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>20</edomv>
+                                                
+                        <edomvd>Pesticide General Permit</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>DESIGN_FLOW</attrlabl>
+                <attrdef>Permitted discharge design flow for the permitted facility</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Permitted discharge flow</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>PERMIT_EXP_DATE</attrlabl>
+                <attrdef>Permit Expiration Date</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Permit Expiration Date</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>DISTRICT_NAME</attrlabl>
+                <attrdef>District Name of facility from Enterprise_District number</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>District Name of facility</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>PERMITEE_NAME</attrlabl>
+                <attrdef>Name of SPDES Permit Holder</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Name of SPDES Permit Holder</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>LOCATION_DIRECTIONS</attrlabl>
+                <attrdef>The street address of the facility.</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>The street address of the facility.</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>CITY</attrlabl>
+                <attrdef>City the facility is located in.</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>City the facility is located in.</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>ZIP</attrlabl>
+                <attrdef>The zip code of the facility.</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>The zip code of the facility.</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>NYTME</attrlabl>
+                <attrdef>The UTM east coordinate of the facility from database</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Coordinates defining the features.</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>NYTMN</attrlabl>
+                <attrdef>The UTM north coordinate of the facility from database</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Coordinates defining the features.</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>LATITUDE</attrlabl>
+                <attrdef>Latitude coordinate in WGS 84</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Coordinates defining the features.</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>LONGITUDE</attrlabl>
+                <attrdef>Longitude coordinate in WGS 84</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Coordinates defining the features.</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>BASIN</attrlabl>
+                <attrdef>4-digit code that represents the NYS water basin and sub-basin</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>4-digit basin/sub-basin code</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>G_S</attrlabl>
+                <attrdef>Designates whether the receiving water type is ground or surface water</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>01</edomv>
+                                                
+                        <edomvd>Groundwater</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>02</edomv>
+                                                
+                        <edomvd>Surface water</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>RECEIVING_WATER</attrlabl>
+                <attrdef>Waterbody receiving the permitted effluent</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Waterbody receiving the permitted effluent</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>REF_TYPE</attrlabl>
+                <attrdef>Type of Principal Reference Point (PRP).  The PRP can be the centroid of the facility, the main entrance, where an outfall or emission point is located, or another location related to the SPDES permit.</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>FACILITY PRP</edomv>
+                                                
+                        <edomvd>Principal Reference Point for the SPDES-permitted facility</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+                <attrdomv>
+                                        
+                    <edom>
+                                                
+                        <edomv>SEWAGE TREATMENT PLANT PRP</edomv>
+                                                
+                        <edomvd>Sewage Treatment Plant Principal Reference Point.  This can be separate from the attached facility.</edomvd>
+                                                
+                        <edomvds>NYSDEC</edomvds>
+                                            
+                    </edom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>REF_DESC</attrlabl>
+                <attrdef>Description of Primary Reference Point</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Description of Primary Reference Point</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>REF_PT_TYPE_NAME</attrlabl>
+                <attrdef>Type of Primary Reference Point</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Type of PRP</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>REF_PT_SRCE_DESC</attrlabl>
+                <attrdef>Source of Primary Reference Point</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Source of Primary Reference Point</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>FAC_DISTRICT_ID</attrlabl>
+                <attrdef>Disctrict ID: Unique DEC Assigned Facility Identifier</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Unique Facility Identifier</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>DETAIL_URL</attrlabl>
+                <attrdef>Web link to SPDES documents</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>URL</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>UTM_EAST</attrlabl>
+                <attrdef>UTM East Coordinate derived from Lat/Long coordinates</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Coordinates defining the feature</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>UTM_NORTH</attrlabl>
+                <attrdef>UTM North coordinate derived from Lat/Long coordinates</attrdef>
+                <attrdefs>NYSDEC</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Coordinates defining the feature</udom>
+                                    
+                </attrdomv>
+            </attr>
+            <attr>
+                <attrlabl>SHAPE</attrlabl>
+                <attrdef>Feature geometry.</attrdef>
+                <attrdefs>Esri</attrdefs>
+                <attrdomv>
+                                        
+                    <udom>Feature geometry</udom>
+                                    
+                </attrdomv>
+            </attr>
+        </detailed>
+    </eainfo>
+    <distinfo>
+        <distrib>
+            <cntinfo>
+                <cntorgp>
+                    <cntorg>New York State Office of Information Technology Services</cntorg>
+                </cntorgp>
+                <cntpos>Environment Portfolio, GeoSpatial Technology Section</cntpos>
+                <cntaddr>
+                    <addrtype>mailing and physical</addrtype>
+                    <address>625 Broadway, 3rd floor</address>
+                    <city>Albany</city>
+                    <state>New York</state>
+                    <postal>12233-2750</postal>
+                    <country>US</country>
+                </cntaddr>
+                <cntvoice>518-402-9860</cntvoice>
+                <cntfax>518-402-9031</cntfax>
+                <cntemail>EnterpriseGIS@dec.ny.gov</cntemail>
+            </cntinfo>
+        </distrib>
+        <resdesc>State Pollutant Discharge Elimination System - New York State (NYSDEC)</resdesc>
+        <distliab>The New York State Department of Environmental Conservation (NYSDEC) provides these geographic data "as is". NYSDEC makes no guarantee or warranty concerning the accuracy of information contained in the geographic data. NYSDEC further makes no warranty, either expressed or implied, regarding the condition of the product or its fitness for any particular purpose. The burden for determining fitness for use lies entirely with the user. Although these data have been processed successfully on a computer system at NYSDEC, no warranty expressed or implied is made regarding the accuracy or utility of the data on any other system or for general or scientific purposes. This disclaimer applies both to individual use of the data and aggregate use with other data. It is strongly recommended that careful attention be paid to the contents of the metadata file associated with these data. NYSDEC shall not be held liable for improper or incorrect use of the data described and/or contained herein.</distliab>
+    </distinfo>
+    <metainfo>
+        <metd>20230315</metd>
+        <metc>
+            <cntinfo>
+                <cntorgp>
+                    <cntorg>New York State Department of Environmental Conservation</cntorg>
+                    <cntper>Division of Water; Bureau of Water Compliance</cntper>
+                </cntorgp>
+                <cntaddr>
+                    <addrtype>mailing and physical</addrtype>
+                    <address>625 Broadway, 3rd floor</address>
+                    <city>Albany</city>
+                    <state>NY</state>
+                    <postal>12233-2750</postal>
+                    <country>US</country>
+                </cntaddr>
+                <cntvoice>518-402-9860</cntvoice>
+                <cntfax>518-402-9031</cntfax>
+                <cntemail>EnterpriseGIS@dec.ny.gov</cntemail>
+            </cntinfo>
+        </metc>
+        <metstdn>FGDC Content Standard for Digital Geospatial Metadata</metstdn>
+        <metstdv>FGDC-STD-001-1998</metstdv>
+        <mettc>local time</mettc>
+    </metainfo>
+</metadata>

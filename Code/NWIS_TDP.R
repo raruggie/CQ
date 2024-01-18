@@ -759,9 +759,9 @@ df.Yield <- lapply(l.Yield, sum)%>%dplyr::bind_rows(., .id = 'Name')%>%pivot_lon
 
 
 
-#####################################################
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #### Correlations ####
-#####################################################
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 # reduce the predictor set down to those we believe are defensible:
 
@@ -776,16 +776,41 @@ pred_to_keep<-c("HYDRO_DISTURB_INDX",
                 names(l.G2$Landscape_Pat), 
                 names(l.G2$LC06_Basin),
                 names(l.G2$LC_Crops),
-                temp1
+                temp1,
+                'HGA', 'HGB', 'HGC', 'HGD',
+                "ELEV_MEDIAN_M_BASIN",
+                "ELEV_STD_M_BASIN",
+                "RRMEDIAN"
 )
 
 # removing 'STADID':
 
 pred_to_keep <- pred_to_keep[!(pred_to_keep %in% "STAID")]
 
+# removing the duplicates of DEV and PDEN
+
+pred_to_keep <- pred_to_keep[!(pred_to_keep %in% c("DEVOPENNLCD06","DEVLOWNLCD06","DEVMEDNLCD06","DEVHINLCD06", "PDEN_DAY_LANDSCAN_2007", "PDEN_NIGHT_LANDSCAN_2007"))]
+
 # filtering df.G2 to this predictor list:
 
 df.G2.reduced<-df.G2%>%select(c('STAID', pred_to_keep))
+
+# take the average of the RIP and MAIN for each land use:
+
+df.G2.reduced<-df.G2.reduced%>%filter(STAID %in% df.TDP_CQ$site_no)%>%
+  rowwise() %>%
+  mutate(MAIN_RIP_DEV_avg = mean(c_across(starts_with("MAINS") | starts_with("RIP") & ends_with("DEV")), na.rm = TRUE),
+         MAIN_RIP_FOREST_avg = mean(c_across(starts_with("MAINS") | starts_with("RIP") & ends_with("FOREST")), na.rm = TRUE),
+         MAIN_RIP_PLANT_avg = mean(c_across(starts_with("MAINS") | starts_with("RIP") & ends_with("PLANT")), na.rm = TRUE),
+         .keep = 'unused'
+  )
+
+# adding up the other crops:
+
+df.G2.reduced<-df.G2.reduced%>%
+  mutate(sum_of_misc_crops = sum(c_across(ends_with(c("COTTON", "RICE", "SORGHUM", "SUNFLOWERS", "PEANUTS", "BARLEY", "DURUM_WHEAT", "OATS", "DRY_BEANS", "POTATOES", "ORANGES", 'OTHER_CROPS', 'IDLE'))), na.rm = TRUE), .keep = 'unused')
+
+names(df.G2.reduced)
 
 # combined the reduced predictors df with the already filtered CQ data:
 
@@ -1254,6 +1279,147 @@ p$labels$fill <- "Slope Magnitude"
 p$labels$shape <- "CQ Type"
 
 p
+
+
+#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### MLR ####
+
+# create a list of dfs, one for each cQ parameter, with the values of the spearman correlations for each predictor:
+
+l.cor.MLR<-df.cor %>%
+  split(., df.cor$CQ_Parameter)%>%
+  lapply(., \(i) i%>% 
+           arrange(desc(abs(Spearman_Correlation)))%>%  
+           # slice_head(n = 7)%>%
+           # bind_rows(i%>%arrange(desc(Spearman_Correlation))%>%slice_head(n = 7))%>%
+           # distinct(term, .keep_all = T)%>%
+           # filter(!between(Spearman_Correlation, -0.25,.25))%>%
+           mutate(sig_0.05 = factor(sig_0.05, levels = c('not', 'sig')))%>%
+           # mutate(term = factor(term, levels = unique(term[order(Spearman_Correlation)])))%>%
+           # filter(sig_0.05 == 'sig')%>%
+           as.data.frame())
+
+
+x<-l.cor.MLR[[1]]
+
+# create a list of dfs from df.OLS.Sens, which contains the values of the predictors, subseting using the names in each l.cor[[i]]$term:
+
+l.cor.MLR.full<-lapply(1:5, \(i) df.OLS_Sens%>%
+                         select(i+1, l.cor.MLR[[i]]$term)%>%
+                         as.data.frame()%>%
+                         rename(term = 1))
+
+names(l.cor.MLR.full)<-names(df.OLS_Sens)[2:6]
+
+y<-l.cor.MLR.full[[1]]
+
+y.round<-round(y, 2)
+
+# create another list but keep the site names for use at end of loop in site outliers:
+
+l.cor.MLR.full.w_name<-lapply(1:5, \(i) df.OLS_Sens%>%
+                                select(1, i+1, l.cor.MLR[[i]]$term)%>%
+                                as.data.frame())
+
+names(l.cor.MLR.full.w_name)<-names(df.OLS_Sens)[2:6]
+
+z<-l.cor.MLR.full.w_name[[1]]
+
+# Trying no feature selection:
+
+# loop through the 5 CQ parameters:
+
+i<-1
+
+m.list<-list()
+
+for (i in 1:5){
+  
+  df<-l.cor.MLR.full[[i]]
+  
+  library(caret)
+  
+  set.seed(123)
+  
+  # Set up repeated k-fold cross-validation
+  
+  train.control <- trainControl(method = "cv", number = 10)
+  
+  # Train the model
+  
+  step.model <- train(term ~., data = df,
+                      method = "leapForward", 
+                      tuneGrid = data.frame(nvmax = 1:5),
+                      trControl = train.control
+  )
+  
+  
+  # look at model results:
+  
+  step.model$results
+  step.model$bestTune
+  summary(step.model$finalModel)
+  coef(step.model$finalModel, as.numeric(step.model$bestTune))
+  
+  # get df of just the predictors in this model:
+  
+  pred<-names(coef(step.model$finalModel, as.numeric(step.model$bestTune)))[-1]
+  
+  df.2<-df%>%select(term, pred)
+  
+  # make lm:
+  
+  m<-lm(term~., data=df.2)
+  
+  m.list[[i]]<-m
+  
+  # summary(m)
+  
+  # look at univarite plots:
+  
+  p<-df.2%>%pivot_longer(cols = 2:last_col(), names_to = 'Predictor', values_to = 'Value')%>%
+    rename(!!names(l.cor.MLR.full)[i]:=term)%>%
+    ggplot(., aes(x=Value, y=!!sym(names(l.cor.MLR.full)[i])))+
+    geom_point()+
+    geom_smooth(method = 'lm')+
+    facet_wrap('Predictor', scales = 'free')
+  
+  p
+  
+  # look at model residuals:
+  
+  # plot(m)
+  
+}
+
+# set m.list names:
+
+names(m.list)<-names(l.cor.MLR.full)
+
+tab_model(m.list, dv.labels = names(m.list), title = paste('Comparison of MLR models for',ncode, 'using forward selection implemented in caret::train'), file="temp.html")
 
 
 #

@@ -800,6 +800,10 @@ df.G2.reduced<-df.G2.reduced%>%
 
 names(df.G2.reduced)
 
+# export this predictor set for the 42 sites:
+
+save(df.G2.reduced, file = 'Processed_Data/df.G2.reduced.Rdata')
+
 # combined the reduced predictors df with the already filtered CQ data:
 
 df.Correlation<-df.TP_CQ%>%

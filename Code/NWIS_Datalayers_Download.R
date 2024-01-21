@@ -71,18 +71,18 @@ load('Processed_Data/NWIS_Watershed_Shapefiles.Rdata')
 
 # download:
 
-rast.NWIS.CDL.2020 <- GetCDLData(aoi = df.sf.NWIS, year = "2022", type = "b", tol_time = 1000)
-rast.NWIS.CDL.2008 <- GetCDLData(aoi = df.sf.NWIS, year = "2008", type = "b", tol_time = 1000)
+# rast.NWIS.CDL.2020 <- GetCDLData(aoi = df.sf.NWIS, year = "2022", type = "b", tol_time = 1000)
+# rast.NWIS.CDL.2008 <- GetCDLData(aoi = df.sf.NWIS, year = "2008", type = "b", tol_time = 1000)
 
 # convert to rast:
 
-rast.NWIS.CDL.2020<-rast(rast.NWIS.CDL.2020)
-rast.NWIS.CDL.2008<-rast(rast.NWIS.CDL.2008)
+# rast.NWIS.CDL.2020<-rast(rast.NWIS.CDL.2020)
+# rast.NWIS.CDL.2008<-rast(rast.NWIS.CDL.2008)
 
 # check CRS of both years:
 
-crs(rast.NWIS.CDL.2020)
-crs(rast.NWIS.CDL.2008)
+# crs(rast.NWIS.CDL.2020)
+# crs(rast.NWIS.CDL.2008)
 
 # plot
 
@@ -91,14 +91,14 @@ crs(rast.NWIS.CDL.2008)
 
 # reproject to sample watershed vector data to match raster data:
 
-vect.NWIS<-vect(df.sf.NWIS) # need to first ininalize vect since sometimes reading in rdata file (terra issue)
-
-vect.NWIS.proj<-terra::project(vect.NWIS, crs(rast.NWIS.CDL.2020))
+# vect.NWIS<-vect(df.sf.NWIS) # need to first ininalize vect since sometimes reading in rdata file (terra issue)
+# 
+# vect.NWIS.proj<-terra::project(vect.NWIS, crs(rast.NWIS.CDL.2020))
 
 # extract frequency tables for each sample watershed
 
-l.NWIS.CDL <- terra::extract(rast.NWIS.CDL.2020, vect.NWIS.proj, table,ID=FALSE)[[1]]
-l.NWIS.CDL.2008 <- terra::extract(rast.NWIS.CDL.2008, vect.NWIS.proj, table,ID=FALSE)[[1]]
+# l.NWIS.CDL <- terra::extract(rast.NWIS.CDL.2020, vect.NWIS.proj, table,ID=FALSE)[[1]]
+# l.NWIS.CDL.2008 <- terra::extract(rast.NWIS.CDL.2008, vect.NWIS.proj, table,ID=FALSE)[[1]]
 
 # save:
 
@@ -132,41 +132,57 @@ reclass_CDL<-data.frame(lapply(l, `length<-`, max(lengths(l))))%>%
   pivot_longer(cols = everything(), values_to = 'MasterCat',names_to = 'Crop')%>%
   drop_na(MasterCat)
 
+# now I am ready to merge withthe legend:
+# doing it two ways. The first is the straigth merge where the CDL classes are in acolumn
+# and the second way is to use thisreclassified legend: to do this:
 # left join each df in the list to the CDL legend key, as well as calcuate the pland:
 
-l.NWIS.CDL<-lapply(l.NWIS.CDL, \(i) i%>%mutate(Var1 = as.integer(as.character(Var1)),Freq=round(Freq/sum(Freq),2))%>%dplyr::left_join(., reclass_CDL, by = c('Var1' = 'MasterCat'))) # I replaced linkdata in the left join with reclass_CDL to get simplified CDL classes
-l.NWIS.CDL.2008<-lapply(l.NWIS.CDL.2008, \(i) i%>%mutate(Var1 = as.integer(as.character(Var1)),Freq=round(Freq/sum(Freq),2))%>%dplyr::left_join(., reclass_CDL, by = c('Var1' = 'MasterCat'))) # I replaced linkdata in the left join with reclass_CDL to get simplified CDL classes
+# the real CDL variables:
+
+l.NWIS.CDL.real<-lapply(l.NWIS.CDL, \(i) i%>%mutate(Var1 = as.integer(as.character(Var1)),Freq=round(Freq/sum(Freq),2))%>%dplyr::left_join(., linkdata, by = c('Var1' = 'MasterCat'))) # I replaced linkdata in the left join with reclass_CDL to get simplified CDL classes
+l.NWIS.CDL.2008.real<-lapply(l.NWIS.CDL.2008, \(i) i%>%mutate(Var1 = as.integer(as.character(Var1)),Freq=round(Freq/sum(Freq),2))%>%dplyr::left_join(., linkdata, by = c('Var1' = 'MasterCat'))) # I replaced linkdata in the left join with reclass_CDL to get simplified CDL classes
+
+# the reclassfied CDL variables (into landuse classes):
+
+l.NWIS.CDL.reclass<-lapply(l.NWIS.CDL, \(i) i%>%mutate(Var1 = as.integer(as.character(Var1)),Freq=round(Freq/sum(Freq),2))%>%dplyr::left_join(., reclass_CDL, by = c('Var1' = 'MasterCat'))) # I replaced linkdata in the left join with reclass_CDL to get simplified CDL classes
+l.NWIS.CDL.2008.reclass<-lapply(l.NWIS.CDL.2008, \(i) i%>%mutate(Var1 = as.integer(as.character(Var1)),Freq=round(Freq/sum(Freq),2))%>%dplyr::left_join(., reclass_CDL, by = c('Var1' = 'MasterCat'))) # I replaced linkdata in the left join with reclass_CDL to get simplified CDL classes
 
 # set names of list:
 
-names(l.NWIS.CDL)<-df.sf.NWIS$Name # note doesnt work with the workflow set up to filter on 2008 limiter
-names(l.NWIS.CDL.2008)<-df.sf.NWIS$Name # note doesnt work with the workflow set up to filter on 2008 limiter
+names(l.NWIS.CDL.real)<-df.sf.NWIS$Name # note doesnt work with the workflow set up to filter on 2008 limiter
+names(l.NWIS.CDL.2008.real)<-df.sf.NWIS$Name # note doesnt work with the workflow set up to filter on 2008 limiter
+names(l.NWIS.CDL.reclass)<-df.sf.NWIS$Name # note doesnt work with the workflow set up to filter on 2008 limiter
+names(l.NWIS.CDL.2008.reclass)<-df.sf.NWIS$Name # note doesnt work with the workflow set up to filter on 2008 limiter
 
 # combine list into single df:
 
-df.NWIS.CDL<-bind_rows(l.NWIS.CDL, .id = 'Name')
-df.NWIS.CDL.2008<-bind_rows(l.NWIS.CDL.2008, .id = 'Name')
+df.NWIS.CDL<-bind_rows(l.NWIS.CDL.real, .id = 'Name')
+df.NWIS.CDL.2008<-bind_rows(l.NWIS.CDL.2008.real, .id = 'Name')
+df.NWIS.CDL.reclass<-bind_rows(l.NWIS.CDL.reclass, .id = 'Name')
+df.NWIS.CDL.2008.reclass<-bind_rows(l.NWIS.CDL.2008.reclass, .id = 'Name')
 
 # remove potential for one of the MasterCats in the CDL to be empty, which is messing with the pivot_wider below:
 
 df.NWIS.CDL<-filter(df.NWIS.CDL, Crop != '')
 df.NWIS.CDL.2008<-filter(df.NWIS.CDL.2008, Crop != '')
+df.NWIS.CD.reclassL<-filter(df.NWIS.CDL.reclass, Crop != '')
+df.NWIS.CDL.2008.reclass<-filter(df.NWIS.CDL.2008.reclass, Crop != '')
 
 # pivot wider:
 
-# if using the CDL linkdata, use this:
+# for the CDL linkdata:
 
-# df.NWIS.CDL<- pivot_wider(df.NWIS.CDL[,-2], names_from = Crop, values_from = Freq)
-# df.NWIS.CDL.2008<- pivot_wider(df.NWIS.CDL.2008[,-2], names_from = Crop, values_from = Freq)
+df.NWIS.CDL<- pivot_wider(df.NWIS.CDL[,-2], names_from = Crop, values_from = Freq)
+df.NWIS.CDL.2008<- pivot_wider(df.NWIS.CDL.2008[,-2], names_from = Crop, values_from = Freq)
 
-# if using the reclass_CDL data, use this:
+# for the reclass_CDL data:
 
-df.NWIS.CDL<-df.NWIS.CDL[,-2]%>%
+df.NWIS.CDL.reclass<-df.NWIS.CDL.reclass[,-2]%>%
   group_by(Name, Crop)%>%
   summarise(Freq=sum(Freq, na.rm = T))%>%
   pivot_wider(., names_from = Crop, values_from = Freq)
 
-df.NWIS.CDL.2008<-df.NWIS.CDL.2008[,-2]%>%
+df.NWIS.CDL.2008.reclass<-df.NWIS.CDL.2008.reclass[,-2]%>%
   group_by(Name, Crop)%>%
   summarise(Freq=sum(Freq, na.rm = T))%>%
   pivot_wider(., names_from = Crop, values_from = Freq)
@@ -175,29 +191,91 @@ df.NWIS.CDL.2008<-df.NWIS.CDL.2008[,-2]%>%
 
 sort(rowSums(df.NWIS.CDL[,-1], na.rm = T))
 sort(rowSums(df.NWIS.CDL.2008[,-1], na.rm = T))
+sort(rowSums(df.NWIS.CDL.reclass[,-1], na.rm = T))
+sort(rowSums(df.NWIS.CDL.2008.reclass[,-1], na.rm = T))
 
-# one of the CDL 2020 is low:
+# potential to find the site if one of the CDL 2020 is low:
 
 which.min(rowSums(df.NWIS.CDL[,-1], na.rm = T))
 
-# this is a long island site, so doesnt matter
+# comparing 2022 CDL to 2008: todo thisL
 
-# other than that site looks good. 
+# rename dfs:
 
-# Done with CDL
+df1<-df.NWIS.CDL
+df2<-df.NWIS.CDL.2008
 
-# actually I want to come up with a workflow to get all years of CDL for the watersheds,
-# butthat isgoing totake a long timeto run...
+# replace NAs with zeros:
 
-# but first I'm going to look at the differences in the CDL between 2008 and 2020
+df1[is.na(df1)]<-0
+df2[is.na(df2)]<-0
+
+# remove all zero columns while keeping Name columns:
+
+df1<-df1%>%
+  select_if(~!(all(. == 0) && is.numeric(.)))
+
+df2<-df2%>%
+  select_if(~!(all(. == 0) && is.numeric(.)))
+
+# use intersect to get the common columns:
+
+cols <- sort(intersect(names(df1), names(df2)))
+
+# remove Name:
+
+cols = cols[!(cols %in% c('Name'))]
+
+# then sort them so that the columns are in same order while subtracting irrespective of their order in their respective data frames
+
+df_temp<-df1[cols] - df2[cols]
+
+# filter down: replace changes that are less than +/- 0.02 to NA first (i.e. those that had 1% change or less I an considering to be nochange)
+# also add NAme column back on:
+
+df_temp<-df_temp%>%
+  mutate_all(~ifelse(abs(.) < 0.02, NA, .))%>%
+  select_if(~any(!is.na(.)))%>%
+  mutate(Name = df.NWIS.CDL$Name, .before = 1)
+  
+# create heatmap of this df: to do this:
+
+# pivot longer:
+
+df_gg<-df_temp%>%pivot_longer(cols = 2:last_col(), values_to = 'Value', names_to = 'Type')
+
+ggplot(df_gg, aes(x = Name, y = Type, fill = Value)) +
+  geom_tile()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))+
+  scale_fill_gradient2(low = "red", high = "green")+
+  ggtitle('Heat Map of the CDL Class Changes For 42 NWIS sites between 2008 and 2022\nNegative values represent a loss from 2008 to 2022')
+
+# 01349840 is an outlier site, so removing that one and rerunning plot:
+
+df_gg%>%filter(Name != '01349840')%>%
+  ggplot(., aes(x = Name, y = Type, fill = Value)) +
+    geom_tile()+
+    theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))+
+    scale_fill_gradient2(low = "red", high = "yellow")+
+    ggtitle('Heat Map of the CDL Class Changes For 42 NWIS sites between 2008 and 2022\nNegative values represent a loss from 2008 to 2022')
+
+# that didnt really work, so now ry removing Deciduous_Forest and Mixed_Forest:
+
+df_gg%>%filter(!Type %in% c('Deciduous_Forest','Mixed_Forest'))%>%
+  ggplot(., aes(x = Name, y = Type, fill = Value)) +
+    geom_tile()+
+    theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))+
+    scale_fill_gradient2(low = "red", high = "green")+
+    ggtitle('Heat Map of the CDL Class Changes For 42 NWIS sites between 2008 and 2022\nNegative values represent a loss from 2008 to 2022')
 
 
+# I think I am done with CDL for now. 
+# I am thinking I would use the 2022 CDL in the correlations and MLR 
+# but only if the predictors that hadthe most change between 2008 and 2022 
+# are in the top correlates/models? Or does it not matter?
 
 
-
-
-
-
+# 
 
 
 

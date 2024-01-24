@@ -1039,7 +1039,7 @@ p<-df.NLCD06%>%
                      ref.group = "0.5") +
   ggtitle('Adjusted USGS Thresholds using Aggregated Data Layers')
 
-p
+# p
 
 #
 
@@ -1165,14 +1165,13 @@ p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
   geom_line(aes(x = Q, y = Seg_C), size = 2.5, color = 'black')+
   geom_line(aes(x = Q, y = Seg_C, color = slope_angle), size = 2)+
   scale_color_manual(name = "Slope Angle", values = hc)+
-  facet_wrap(dplyr::vars(n_sample_rank), scales = 'free')+
+  facet_wrap(dplyr::vars(n_sample_rank), scales = 'fixed')+
   theme(
     strip.background = element_blank(),
     strip.text.x = element_blank()
   )+
   geom_rect(data = df_Seg.2%>%distinct(df_Seg.2$site, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, fill = USGS.LU.Adjusted), alpha = .35)+
   scale_fill_manual(name = "USGS Landuse\n(Adjusted)", values = c("red", "blue","yellow", "green"))
-
 
 p
 
@@ -1261,6 +1260,9 @@ p$labels$shape <- "CQ Type"
 
 p
 
+# want to recreate this plot in Code/FingerLakesPresentation.R so exporting df.tri:
+
+# save(df.tri, file = 'Processed_Data/df.tri.Rdata')
 
 #
 
@@ -1406,6 +1408,9 @@ names(m.list)<-names(l.cor.MLR.full)
 
 tab_model(m.list, dv.labels = names(m.list), title = paste('Comparison of MLR models for',ncode, 'using forward selection implemented in caret::train'), file="temp.html")
 
+# export m.list for use in Code/FingerLakesPresentation.R:
+
+save(m.list, file = 'Processed_Data/m.list.TP.Rdata')
 
 #
 

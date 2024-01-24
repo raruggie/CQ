@@ -1307,6 +1307,9 @@ p$labels$shape <- "CQ Type"
 
 p
 
+# want to recreate this plot in Code/FingerLakesPresentation.R so exporting df.tri:
+
+# save(df.tri, file = 'Processed_Data/df.tri.SRP.Rdata')
 
 #
 
@@ -1452,6 +1455,9 @@ names(m.list)<-names(l.cor.MLR.full)
 
 tab_model(m.list, dv.labels = names(m.list), title = paste('Comparison of MLR models for',ncode, 'using forward selection implemented in caret::train'), file="temp.html")
 
+# export m.list for use in Code/FingerLakesPresentation.R:
+
+save(m.list, file = 'Processed_Data/m.list.SRP.Rdata')
 
 #
 

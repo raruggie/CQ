@@ -54,8 +54,12 @@ source("Code/Ryan_functions.R")
 
 ####################### Goal of code #######################
 
+# 1)
 # download and process watershed attributes from datalayers
 # watershed shapefiles come from Code/NWIS_Delineate_and_WWTP.R
+
+# 2)
+# recreate the GAGES II predictors
 
 ####################### Workflow #######################
 
@@ -132,7 +136,7 @@ reclass_CDL<-data.frame(lapply(l, `length<-`, max(lengths(l))))%>%
   pivot_longer(cols = everything(), values_to = 'MasterCat',names_to = 'Crop')%>%
   drop_na(MasterCat)
 
-# now I am ready to merge withthe legend:
+# now I am ready to merge with the legend:
 # doing it two ways. The first is the straigth merge where the CDL classes are in acolumn
 # and the second way is to use thisreclassified legend: to do this:
 # left join each df in the list to the CDL legend key, as well as calcuate the pland:
@@ -268,18 +272,69 @@ df_gg%>%filter(!Type %in% c('Deciduous_Forest','Mixed_Forest'))%>%
     scale_fill_gradient2(low = "red", high = "green")+
     ggtitle('Heat Map of the CDL Class Changes For 42 NWIS sites between 2008 and 2022\nNegative values represent a loss from 2008 to 2022')
 
-
 # I think I am done with CDL for now. 
 # I am thinking I would use the 2022 CDL in the correlations and MLR 
 # but only if the predictors that hadthe most change between 2008 and 2022 
 # are in the top correlates/models? Or does it not matter?
 
 
-# 
+#### recreating the GAGES II predictor set ####
+
+# these are the GAES II predictors:
+
+load('Processed_Data/df.G2.reduced.Rdata')
+
+v<-names(df.G2.reduced)
+
+# HYDRO_DISTURB_INDX can be replaced by FRAGUN_BASIN
+# pre1990_STOR may not be able to get but going to try using NHD
+# HIRES_LENTIC_NUM, HIRES_LENTIC_DENS, and HIRES_LENTIC_MEANSIZ (number,density, and mean size of lakes ponds resvioirs, maybe just need 1?) can get from NHD
+# DEVNLCD06 = Developed, FORESTNLCD06 = Forest, PLANTNLCD06 = Ag+Pasture, WATERNLCD06 = Water, SNOWICENLCD06+BARRENNLCD06+GRASSNLCD06 = Other, DECIDNLCD06+EVERGRNLCD06+MIXEDFORNLCD06+SHRUBNLCD06 = Forest, PASTURENLCD06 = Pasture,CROPSNLCD06 = Ag,WOODYWETNLCD06+EMERGWETNLCD06=Wetlands_All
+# CDL_CORN,CDL_SOYBEANS,CDL_SPRING_WHEAT,CDL_WINTER_WHEAT,CDL_WWHT_SOY_DBL_CROP,CDL_ALFALFA,CDL_OTHER_HAYS, are covered in CDL_ALL_OTHER_LAND 
 
 
 
 
+
+#### Land use ####
+
+# recreating the GAGES II land use predictors: 
+# using the 2008 CDL data:
+# The CDL reclass can be used for the NLCD ones and the non-reclass
+# can be used for the CDL ones:
+
+# reclass:
+
+G2_landuse<-df.NWIS.CDL.2008.reclass
+
+# non-reclass:
+# the CDL ones in gauges 2 do not match the CDL names :/
+
+cdl_names <- grep("^CDL", v)
+
+v <- v[cdl_names]
+
+v<-sub("^CDL_", "", v)
+
+v
+
+names(df.NWIS.CDL.2008)
+
+# Soybeans, Corn, Alfalfa, Spring_Wheat, Other_Hay/Non_Alfalfa, Grassland/Pasture, Dbl_Crop_WinWht/Soybeans, Winter_Wheat,
+# ALL_OTHER_LAND is non-crop land
+
+# now add just these columns to the G2 dataframe:
+
+keep<-c('Name', 'Soybeans', 'Corn', 'Alfalfa','Spring_Wheat', 'Other_Hay/Non_Alfalfa', 'Grassland/Pasture', 'Dbl_Crop_WinWht/Soybeans', 'Winter_Wheat')
+
+G2_landuse<-G2_landuse%>%left_join(., df.NWIS.CDL.2008%>%select(keep), by = 'Name')
+
+# set NAs to zero:
+
+G2_landuse[is.na(G2_landuse)]<-0
+
+
+p#
 
 
 

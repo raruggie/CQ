@@ -304,4 +304,17 @@ fun.Process_climate<-function(df, site, date){
   return(df.date)
 }
 
+# normalize from 0 to 1:
+
+normalized<-function(y) {
+  
+  x<-y[!is.na(y)]
+  
+  x<-(x - min(x)) / (max(x) - min(x))
+  
+  y[!is.na(y)]<-x
+  
+  return(y)
+}
+
 

@@ -77,7 +77,7 @@ df.points<-readNWISsite(df.sf.NWIS$Name)%>%
 
 # make map:
 
-mapview(df.sf.NWIS, zcol = 'drain_area_va', layer.name = 'Drainage Area')+mapview(df.points, zcol = 'drain_area_va', legend = FALSE)
+# mapview(df.sf.NWIS, zcol = 'drain_area_va', layer.name = 'Drainage Area')+mapview(df.points, zcol = 'drain_area_va', legend = FALSE)
 
 #
 
@@ -87,12 +87,43 @@ mapview(df.sf.NWIS, zcol = 'drain_area_va', layer.name = 'Drainage Area')+mapvie
 
 load('Processed_Data/TP.df_Seg.2.Rdata')
 
-# make map of sites colored by land use: to do this first need to add the land use class to df.sf.NWIS:
+# add the land use class and *TP regime type* to df.sf.NWIS and df.points:
 
 df.sf.NWIS<-df.sf.NWIS%>%left_join(., df_Seg.2%>%distinct(site, .keep_all = T)%>%select(site, USGS.LU.Adjusted, Type), by = c('Name'='site'))
 df.points<-df.points%>%left_join(., df_Seg.2%>%distinct(site, .keep_all = T)%>%select(site, USGS.LU.Adjusted, Type), by = c('site_no'='site'))
 
-mapview(df.sf.NWIS, zcol = 'USGS.LU.Adjusted', layer.name = 'USGS Landuse Classification')+mapview(df.points, zcol = 'drain_area_va', legend = FALSE)
+# make map of sites colored by land use
+
+# mapview(df.sf.NWIS, zcol = 'USGS.LU.Adjusted', layer.name = 'USGS Landuse Classification')+mapview(df.points, zcol = 'drain_area_va', legend = FALSE)
+
+# change the string for little beaver kill:
+
+df.points$station_nm[31]<-"LITTLE BEAVER KILL AT\nBEECHFORD NEAR MT TREMPER NY"
+
+# load in df.tri for TP for the sites TP OLS slope data:
+
+load('Processed_Data/df.tri.Rdata')
+df.tri.TP<-df.tri
+
+# merge slope with df_Seg.2:
+
+df_Seg.2<-left_join(df_Seg.2, df.tri.TP%>%select(site_no, Slope), by = c('site' = 'site_no'))
+
+# add site name columns:
+
+df_Seg.2<-left_join(df_Seg.2, df.points%>%select(site_no,station_nm, drain_area_va), by = c('site'='site_no'))%>%
+  mutate(site_no = site, .after = 2)%>% # preseve column with just site number
+  mutate(site = paste0(site, ' ', station_nm, '\nDA = ', drain_area_va, ' sqmi, TP Export Regime = ', Type, ' (Slope = ', Slope, ')', '\nMajor Land Use in Watershed = ', USGS.LU.Adjusted))
+
+# set site column as ordered factor based on DA size for facet plotting order:
+
+df_Seg.2<-df_Seg.2%>%mutate(site = factor(site, levels = unique(site[order(drain_area_va)])))
+
+# normalize flow by DA:
+# ft3/sec * 1m3/35.314667ft3 * 1/km2 * 86400sec/1day * 1km2/1000000m2 * 1000mm/1m
+# cfs * (1/km2) * 2.446576
+
+df_Seg.2<-df_Seg.2%>%mutate(Q_mm_day= Q_real * (1/(drain_area_va*2.59)) * 2, .after = Q_real)
 
 # create 3 pairs of sites:
 
@@ -102,26 +133,25 @@ df_keep<-data.frame(keep, keep_names)
 
 # filter df.Seg_2 to 3 pairs of sites:
 
-df_Seg.2<-filter(df_Seg.2, site %in% keep)
-
-# and add site name columns:
-# first change the string for little beaver kill:
-
-df.points$station_nm[31]<-"LITTLE BEAVER KILL AT\nBEECHFORD NEAR MT TREMPER NY"
-
-df_Seg.2<-left_join(df_Seg.2, df.points%>%select(site_no,station_nm, drain_area_va), by = c('site'='site_no'))%>%mutate(site = paste(site, station_nm, '\nDA =', drain_area_va, 'sqmi'))
-
-# set site column as ordered factor based on DA size for facet plotting order:
-
-df_Seg.2<-df_Seg.2%>%mutate(site = factor(site, levels = unique(site[order(drain_area_va)])))
+df_Seg.2<-filter(df_Seg.2, site_no %in% keep)
 
 # try plotting all together:
 
-p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
-  geom_point(aes(color = Type))+
+p<-ggplot(df_Seg.2, aes(x = Q_mm_day, y = C))+
+  geom_point(
+    # aes(color = Type)
+    )+
+  scale_x_log10(
+    breaks = scales::trans_breaks("log10", function(x) 10^x),
+    labels = scales::trans_format("log10", scales::math_format(10^.x))
+  )+
+  scale_y_log10(
+    breaks = scales::trans_breaks("log10", function(x) 10^x),
+    labels = scales::trans_format("log10", scales::math_format(10^.x))
+  )+
   scale_color_manual(name = "CQ Type", values = c("red", "blue", "green"))+
-  ylab('log(TP - mg/L)')+
-  xlab('log(Discharge - cfs)')+
+  ylab('TP (mg/L)')+
+  xlab('Discharge (mm/day)')+
   geom_smooth(method = 'lm')+
   new_scale_color() +
   # geom_line(aes(x = Q, y = Seg_C), size = 2.5, color = 'black')+
@@ -131,11 +161,11 @@ p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
   theme(
     # strip.background = element_blank(),
     # strip.text.x = element_blank(),
-    legend.position="bottom"
-  )+
-  geom_rect(data = df_Seg.2%>%distinct(df_Seg.2$site, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, fill = USGS.LU.Adjusted), alpha = .35)+
-  scale_fill_manual(name = "USGS Landuse\n(Adjusted)", values = c("red", "blue","yellow", "green"))+
-  guides(fill=guide_legend(nrow=2,byrow=TRUE))
+    legend.position="none"
+  ) #+
+  # geom_rect(data = df_Seg.2%>%distinct(df_Seg.2$site, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, fill = USGS.LU.Adjusted), alpha = .35)+
+  # scale_fill_manual(name = "USGS Landuse\n(Adjusted)", values = c("red", "blue","yellow", "green"))+
+  # guides(fill=guide_legend(nrow=2,byrow=TRUE))
 
 p
 
@@ -222,7 +252,7 @@ mapview(x, zcol = 'USGS.LU.Adjusted', layer.name = 'Drainage Area') #+mapview(df
 x<-df.sf.NWIS%>%select(-Type)%>%left_join(., df.tri.SRP%>%select(site_no, Slope, Type), by = c('Name'='site_no'))%>%drop_na(Type)
 y<-df.points%>%select(-Type)%>%left_join(., df.tri.SRP%>%select(site_no, Slope, Type), by = 'site_no')%>%drop_na(Type)
 
-mapview(x, zcol = 'Type', layer.name = 'SRP Export Regime')+mapview(y, zcol = 'Type', legend = FALSE)
+mapview(x, zcol = 'Type', layer.name = 'SRP Export Regime')+mapview(y, zcol = 'Type', legend = FALSE, cex = 2)
 
 # what are the dilutionary SRP sites doing for TP?:
 
@@ -258,8 +288,9 @@ l.m.list.yield<-lapply(l.m.list, \(i) i[[5]])
 tab_model(l.m.list.intercept, dv.labels = names(l.m.list.intercept), title = paste('Comparison of MLR models for CQ Intercept'), file="temp.html")
 tab_model(l.m.list.yield, dv.labels = names(l.m.list.yield), title = paste('Comparison of MLR models for AAY'), file="temp.html")
 
+#### Kable table of site result list and model comparison ####
 
-#### Kable table of site result list ####
+#### site result list:
 
 # read in dataframe of site result list:
 
@@ -270,27 +301,81 @@ x %>%
   kable_classic(html_font = 'Times', font_size = 14, full_width = F) %>%
   add_header_above(c(" ", "Number of Sites"=4)) 
 
+#### model comparison:
+
+x<-read.csv("Processed_Data/NWIS_MLR_model_comparison_for_poster.csv", check.names=FALSE)
+
+options(knitr.kable.NA = '')
+
+x %>%
+  # mutate_all(as.character)%>%
+  kbl(align = "c",escape = F, caption = "HIIIII") %>%
+  kable_classic(html_font = 'Times', font_size = 14, full_width = F) %>%
+  add_header_above(c(" ", "TP"=2,"TN"=2,"TDP"=2,"SRP"=2))%>%
+  add_header_above(c(" ", 'Model Estimates'=8))%>%
+  row_spec(seq(1,nrow(x),2), background="#FF000020")
 
 %>%
-  add_header_above(c(" " = 2, "2019" = 4, " " = 1, "2020" = 4, " " = 1, "2021" = 4, " " = 1)) %>%
-  # add_header_above(c(" " = 1, "TP Loading (g/ha) by Water Year (Oct-Sep)\nG = Growing Season (May-Sep), NG = Non-growing" = 15))%>%
-  collapse_rows(., columns = 1, valign = 'middle')%>%
-  row_spec(c(3,6), extra_css = "border-bottom: 1px solid")%>%
-  kableExtra::footnote(general = "Sampling errors resulted in the following number of missing events and load estimates:", 
-                       alphabet = c(
-                         "Growing: 1 event, 171 g/ha, Non-Growing: 4 events, 261 g/ha",
-                         "Growing: 3 events, 64 g/ha, Non-Growing: 7 events, 630 g/ha",
-                         "Non-Growing: 14 events, 2770 g/ha",
-                         "Growing: 1 event, 2 g/ha",
-                         "Non-Growing: 14 events, 555 g/ha",
-                         "Growing: 1 event, 3 g/ha"
-                       )
-  )
+  kable_paper("striped", full_width = F) 
 
-# 
+%>%
+  add_indent(c(1, 3, 5))
 
 
+#### Conceptual CQ diagram ####
 
+# reload df_Seg.2 and run through workflow above:
+
+load('Processed_Data/TP.df_Seg.2.Rdata')
+
+df_Seg.2<-left_join(df_Seg.2, df.points%>%select(site_no,station_nm, drain_area_va), by = c('site'='site_no'))%>%
+  mutate(site_no = site, .after = 2)%>% # preseve column with just site number
+  mutate(site = paste(site, station_nm, '\nDA =', drain_area_va, 'sqmi'))
+
+df_Seg.2<-df_Seg.2%>%mutate(site = factor(site, levels = unique(site[order(drain_area_va)])))
+
+# normalize flow by DA:
+# ft3/sec * 1m3/35.314667ft3 * 1/km2 * 86400sec/1day * 1km2/1000000m2 * 1000mm/1m
+# cfs * (1/km2) * 2.446576
+
+df_Seg.2<-df_Seg.2%>%mutate(Q_mm_day= Q_real * (1/(drain_area_va*2.59)) * 2, .after = Q_real)
+
+# make CQ facet plot of three sites: one mobilizing, one staitonary, and one diluting:
+
+p$site[31]<-"LITTLE BEAVER KILL AT\nBEECHFORD NEAR MT TREMPER NY"
+
+p<-df_Seg.2%>%filter(site_no %in% df.sf.NWIS$Name[c(33,34,40)])%>%
+  ggplot(., aes(x = Q_mm_day, y = C))+
+  geom_point(aes(color = Type))+
+  scale_color_manual(name = "CQ Type", values = c("red", "blue", "green"))+
+  ylab('Nutrient Concentration (mg/L)')+
+  xlab('Discharge (mm/day)')+
+  scale_x_log10(
+    breaks = scales::trans_breaks("log10", function(x) 10^x),
+    labels = scales::trans_format("log10", scales::math_format(10^.x))
+  )+
+  scale_y_log10(
+    breaks = scales::trans_breaks("log10", function(x) 10^x),
+    labels = scales::trans_format("log10", scales::math_format(10^.x))
+  )+
+  geom_smooth(method = 'lm')+
+  # new_scale_color() +
+  # geom_line(aes(x = Q, y = Seg_C), size = 2.5, color = 'black')+
+  # geom_line(aes(x = Q, y = Seg_C, color = slope_angle), size = 2)+
+  # scale_color_manual(name = "Slope Angle", values = hc)+
+  facet_wrap('Type', scales = 'free', ncol = 3, dir="v")+
+  theme(
+    # strip.background = element_blank(),
+    # strip.text.x = element_blank(),
+    legend.position="none",
+    # strip.text = element_text(size = 6),
+    # strip.clip = "off"
+  ) #+
+  # geom_rect(data = df_Seg.2%>%distinct(df_Seg.2$site, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, fill = USGS.LU.Adjusted), alpha = .35)+
+  # scale_fill_manual(name = "USGS Landuse\n(Adjusted)", values = c("red", "blue","yellow", "green"))+
+  # guides(fill=guide_legend(nrow=2,byrow=TRUE))
+
+p
 
 
 

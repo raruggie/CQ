@@ -2,17 +2,17 @@
 (USGS pcode)",Greater Than 20 samples,With Data after 2001,And Not on Long Island,And In GAGES II
 "Total 
 Phosphorus
-(TP - 00665)",137,69,68,"42 (89, 73)"
+(TP - 00665)",137,69,68,42
 "Total
 Nitrogen
-(TN - 00600)",102,31,31,"17 (68, 53)"
+(TN - 00600)",102,31,31,17
 "Nitrate
-(NO3 - 00620)",66,13,13,"6 (48, 33)"
+(NO3 - 00620)",66,13,13,6
 "Total
 Dissolved
 Phosphorus
-(TDP -00666)",61,25,24,"18 (42, 36)"
+(TDP -00666)",61,25,24,18
 "Soluble
 Reactive
 Phosphorus
-(SRP - 00660)",119,64,63,"40 (78, 61)"
+(SRP - 00660)",119,64,63,40

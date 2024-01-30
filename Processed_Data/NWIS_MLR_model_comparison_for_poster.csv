@@ -4,8 +4,6 @@ Intercept of MLR Model,,0.28,0.82,3.34,-4.75,0.16,-3.78,0.16
 Deviation of Elevation",-0.02,,,,,,,
 "Watershed Median
 Elevation Relief Ratio",-6.16,,,,,,,
-"Watershed Median
-Elevation of Basin",,,0,,,,,
 "Watershed percent
 Mixed Forest",,,,,-0.04,,,
 "Watershed Number 
@@ -20,7 +18,7 @@ of Lakes/Ponds
 Water Bodies",,,,,,,-1.07,
 "Watershed percent
 of Hydrologic Soil 
-Group B",,0.01,,,,,0.02,0
+Group B",,0.01,,,,,0.02,
 "Watershed percent
 Agriculture 
 with the exception 
@@ -31,6 +29,4 @@ Cropping Systems ",,,,1.83,,,,
 (agriculture)",,,,0.07,,,,
 "Watershed percent 
 Soybeans",,,,-2.36,,,,
-"Watershed percent
-non-crop land",,,,,,0,,
-Adjusted R^2 of MLR model,0.306,0.224,0.775,0.879,0.783,0.199,0.16,0.174
+Adjusted R^2 of MLR model,0.31,0.22,0.78,0.88,0.78,0.2,0.16,0.17

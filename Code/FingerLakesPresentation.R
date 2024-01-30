@@ -206,9 +206,10 @@ l.tri<-lapply(l.tri, \(i) i%>%mutate(Slope = normalized(abs(Slope))))
 df.tri.4<-bind_rows(l.tri, .id = 'Consit')%>%
   mutate(group = ifelse(site_no %in% c("04231600","04260500","04249000","01357500"), site_no, NA))%>%
   left_join(., df_keep, by = c('site_no'='keep'))
+
 # ready to create facet plot:
 
-p.4<-ggplot(df.tri.4, aes(x=DEVNLCD06, y=PLANTNLCD06*10
+p.4<-ggplot(df.tri.4, aes(x=DEVNLCD06, y=PLANTNLCD06
                             , label = keep_names
                             )) +
   # geom_point(data=df.tri.4[df.tri.4$group == "important",],color="red",size=5)+
@@ -234,6 +235,40 @@ p.4$labels$shape <- "CQ Type"
 
 p.4
 
+# make the plot with no shapes and points going from negative to positive:
+
+l.tri<-list(df.tri.TP, df.tri.TN, df.tri.TDP, df.tri.SRP)%>%purrr::set_names(c('TP', 'TN', 'TDP', 'SRP'))
+df.tri.4<-bind_rows(l.tri, .id = 'Consit')%>%
+  mutate(group = ifelse(site_no %in% c("04231600","04260500","04249000","01357500"), site_no, NA))%>%
+  left_join(., df_keep, by = c('site_no'='keep'))
+
+p.4<-ggplot(df.tri.4, aes(x=DEVNLCD06, y=PLANTNLCD06
+                          , label = keep_names
+)) +
+  # geom_point(data=df.tri.4[df.tri.4$group == "important",],color="red",size=5)+
+  geom_point(aes(shape=as.factor(Type), fill=Slope), size = 4) +
+  scale_shape_manual(values = c("Mobilization" = 24, "Dilution" = 25, "Stationary" = 22),
+                     guide = guide_legend(override.aes = list(fill = "pink")))+
+  scale_fill_gradient2(low = "yellow", high = "red")+
+  facet_wrap('Consit', scales = 'fixed')+
+  theme(
+    # strip.background = element_blank(),
+    # strip.text.x = element_blank(),
+    legend.position="bottom"
+  )+
+  ggrepel::geom_text_repel(position = position_nudge(x = .7, y = .7), angle = 45, hjust = 0, vjust = 0)+
+  xlab('Percent Developed')+
+  ylab('Percent Agriculture')+
+  scale_x_continuous(expand = expansion(mult = .2))+
+  scale_y_continuous(expand = expansion(mult = .2)) # +
+# ggtitle(paste('TP', 'CQ type and slope magnitude as a function of percent Ag and Developed Land'))
+
+p.4$labels$fill <- "Normalized (0-1) \nSlope Magnitude"
+p.4$labels$shape <- "CQ Type"
+
+p.4
+
+
 # look at sites that are dilutionary:
 
 df.tri.TP$site_no[df.tri.TP$Type=='Dilution'] # there is only 1 TP site
@@ -252,7 +287,7 @@ mapview(x, zcol = 'USGS.LU.Adjusted', layer.name = 'Drainage Area') #+mapview(df
 x<-df.sf.NWIS%>%select(-Type)%>%left_join(., df.tri.SRP%>%select(site_no, Slope, Type), by = c('Name'='site_no'))%>%drop_na(Type)
 y<-df.points%>%select(-Type)%>%left_join(., df.tri.SRP%>%select(site_no, Slope, Type), by = 'site_no')%>%drop_na(Type)
 
-mapview(x, zcol = 'Type', layer.name = 'SRP Export Regime')+mapview(y, zcol = 'Type', legend = FALSE, cex = 2)
+mapview(x, zcol = 'Type', layer.name = 'SRP Export Regime')+mapview(y, zcol = 'Type', legend = FALSE, cex = 3)
 
 # what are the dilutionary SRP sites doing for TP?:
 
@@ -315,11 +350,6 @@ x %>%
   add_header_above(c(" ", 'Model Estimates'=8))%>%
   row_spec(seq(1,nrow(x),2), background="#FF000020")
 
-%>%
-  kable_paper("striped", full_width = F) 
-
-%>%
-  add_indent(c(1, 3, 5))
 
 
 #### Conceptual CQ diagram ####
@@ -376,6 +406,83 @@ p<-df_Seg.2%>%filter(site_no %in% df.sf.NWIS$Name[c(33,34,40)])%>%
   # guides(fill=guide_legend(nrow=2,byrow=TRUE))
 
 p
+
+#### Test if elevation is proxy for land use ####
+
+# load df.G2.reduced:
+
+load('Processed_Data/df.G2.reduced.Rdata')
+
+x<-df.G2.reduced
+
+# look at some biplots:
+
+plot(x$ELEV_STD_M_BASIN, x$RRMEDIAN)
+
+plot(x$DEVNLCD06, x$ELEV_MEDIAN_M_BASIN)
+y<-lm(x$ELEV_MEDIAN_M_BASIN~x$DEVNLCD06)
+summary(y)
+abline(y)
+cor(x$DEVNLCD06, x$ELEV_MEDIAN_M_BASIN)
+
+plot(x$PLANTNLCD06, x$ELEV_MEDIAN_M_BASIN)
+y<-lm(x$ELEV_MEDIAN_M_BASIN~x$PLANTNLCD06)
+summary(y)
+abline(y)
+cor(x$PLANTNLCD06, x$ELEV_MEDIAN_M_BASIN)
+
+# make triangle plot for this!:
+
+df.tri.4.proxy<-left_join(df.tri.4, df.G2.reduced%>%select(STAID, ELEV_MEDIAN_M_BASIN, ELE), by = c('site_no'='STAID'))
+
+p.4<-ggplot(df.tri.4.proxy, aes(x=DEVNLCD06, y=PLANTNLCD06)) +
+  geom_point(aes(color=ELEV_MEDIAN_M_BASIN, size = 4)) +
+  facet_wrap('Consit', scales = 'fixed')+
+  theme(
+    # strip.background = element_blank(),
+    # strip.text.x = element_blank(),
+    legend.position="bottom"
+  )+
+  xlab('Percent Developed')+
+  ylab('Percent Agriculture')
+
+p.4
+
+# just do ggplotbiplots:
+
+
+p.4<-ggplot(df.tri.4.proxy, aes(x=PLANTNLCD06, y=ELEV_MEDIAN_M_BASIN)) +
+  geom_point() +
+  facet_wrap('Consit', scales = 'fixed')+
+  theme(
+    # strip.background = element_blank(),
+    # strip.text.x = element_blank(),
+    legend.position="bottom"
+  )+
+  xlab('Percent Ag')+
+  ylab('median elev')
+
+p.4
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

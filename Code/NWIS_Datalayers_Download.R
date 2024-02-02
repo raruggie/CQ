@@ -292,6 +292,48 @@ v<-names(df.G2.reduced)
 # DEVNLCD06 = Developed, FORESTNLCD06 = Forest, PLANTNLCD06 = Ag+Pasture, WATERNLCD06 = Water, SNOWICENLCD06+BARRENNLCD06+GRASSNLCD06 = Other, DECIDNLCD06+EVERGRNLCD06+MIXEDFORNLCD06+SHRUBNLCD06 = Forest, PASTURENLCD06 = Pasture,CROPSNLCD06 = Ag,WOODYWETNLCD06+EMERGWETNLCD06=Wetlands_All
 # CDL_CORN,CDL_SOYBEANS,CDL_SPRING_WHEAT,CDL_WINTER_WHEAT,CDL_WWHT_SOY_DBL_CROP,CDL_ALFALFA,CDL_OTHER_HAYS, are covered in CDL_ALL_OTHER_LAND 
 
+# make a table of predictors: to do this:
+
+# read in variable description:
+
+var_desc <- readxl::read_excel("Raw_Data/gagesII_sept30_2011_var_desc.xlsx")
+
+# filter to those in df.G2.reduced create counter column, and reduce columns:
+
+var_desc<-filter(var_desc, VARIABLE_NAME %in% v)%>%
+  mutate(Count = row_number())%>%
+  select(Count, VARIABLE_NAME, DESCRIPTION)
+
+# note that the reason there are 43 in this df and 47 in vector 'v' is because the last
+# 4 in 'v' are the ones I made up
+
+# make descirptions for these:
+
+x<-c('Mainstem and Ripairan percent developed (Ryan created it from MAIN_DEV_ and RIP_DEV_ 100 and 800 GAGES II variables',
+  'Mainstem and Ripairan percent forest (Ryan created it from MAIN_FOR_ and RIP_FOR_ 100 and 800 GAGES II variables',
+  'Mainstem and Ripairan percent agriculture (Ryan created it from MAIN_PLANT_ and RIP_PLANT_ 100 and 800 GAGES II variables',
+  'Watershed percent crops not affiliated with dairy agriculture (Ryan created from potatoes, cabbange, grapes, etc.)')
+
+
+# create a dataframe to bind_rows with var_desc:
+
+x<-data.frame(Count = c(44:47), 
+              VARIABLE_NAME = dput(v[!v %in% var_desc$VARIABLE_NAME]),
+              DESCRIPTION = x
+)
+
+# add these back in:
+
+var_desc<-bind_rows(var_desc, x)
+
+# make kable table:
+
+var_desc %>%
+  kbl(align = "c",escape = F) %>%
+  kable_classic(html_font = 'Times', font_size = 14, full_width = F)%>%
+  row_spec(seq(1,nrow(var_desc),2), background="#FF000020")
+
+
 
 
 

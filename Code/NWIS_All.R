@@ -172,7 +172,7 @@ for (i in names(l.df_Seg.2)){
   
 }
 
-# l.plots
+l.plots
 
 # the third plot for SRP looks like the TP blob prior to
 # removing the pre-2001 samples, so I want to take a closer look:

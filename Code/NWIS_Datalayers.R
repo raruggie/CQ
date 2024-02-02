@@ -54,12 +54,10 @@ source("Code/Ryan_functions.R")
 
 ####################### Goal of code #######################
 
-# 1)
-# download and process watershed attributes from datalayers
-# watershed shapefiles come from Code/NWIS_Delineate_and_WWTP.R
+# 1) recreate the GAGES II predictors using data layers for the 
+# 42 sites I ID in the NWIS workflow, using the GAGES values for QA
 
-# 2)
-# recreate the GAGES II predictors
+# 2) (actually comes first) comparing early and recent CDL values
 
 ####################### Workflow #######################
 
@@ -67,9 +65,7 @@ source("Code/Ryan_functions.R")
 
 load('Processed_Data/NWIS_Watershed_Shapefiles.Rdata')
 
-####~~~~ Data Layers ~~~~####
-
-#### CDL: ####
+####~~~ CDL: Early and Recent downloads and comparisons ~~~####
 
 # note when I ran ths CDL code block I used the 103 sites thatwere apartofthe set, this is prior to filtering based onthe CDLdate... so I am just going to filter the resulting CDL df at the end. Just note that what is saved is of the 103 sites, but that the code doesnt reflect this, i.e. I just ran the filter anddidnt keep the code because df.NWIS.TP.keep would be down to 56 if I did it right 
 
@@ -119,11 +115,13 @@ l.NWIS.CDL.2008<-lapply(l.NWIS.CDL.2008, as.data.frame)
 
 # the next step is to join the CDL key with these dfs, but first:
 
+x<-CropScapeR::linkdata
+
 # aggregate CDL: to do this:
 # looking at the CDL legend (CropScapeR::linkdata), I determined the following:
 
-Ag<-c(1:6,10:14,21:39,41:61,66:72,74:77,204:214,216:227,229:250,254)
-Pasture<-c(176)
+Ag<-c(1:6,10:14,21:39,41:61,66:72,74:77,204:214,216:227,229:250,254, 176, 92) # I added Pasture to this to get it more similar to PLANTNLCD06 from GAGES II
+Pasture<-c(36,37,58,176) # I added some other pasture sounding ones to get is closer to PASTURENLCD06
 Forest<-c(63,141:143)
 Developed<-c(82,121:124)
 Water<-c(83,111)
@@ -169,7 +167,7 @@ df.NWIS.CDL.2008.reclass<-bind_rows(l.NWIS.CDL.2008.reclass, .id = 'Name')
 
 df.NWIS.CDL<-filter(df.NWIS.CDL, Crop != '')
 df.NWIS.CDL.2008<-filter(df.NWIS.CDL.2008, Crop != '')
-df.NWIS.CD.reclassL<-filter(df.NWIS.CDL.reclass, Crop != '')
+df.NWIS.CDL.reclass<-filter(df.NWIS.CDL.reclass, Crop != '')
 df.NWIS.CDL.2008.reclass<-filter(df.NWIS.CDL.2008.reclass, Crop != '')
 
 # pivot wider:
@@ -241,10 +239,10 @@ df_temp<-df_temp%>%
   mutate_all(~ifelse(abs(.) < 0.02, NA, .))%>%
   select_if(~any(!is.na(.)))%>%
   mutate(Name = df.NWIS.CDL$Name, .before = 1)
-  
-# create heatmap of this df: to do this:
 
 # pivot longer:
+
+# create heatmap of this df:
 
 df_gg<-df_temp%>%pivot_longer(cols = 2:last_col(), values_to = 'Value', names_to = 'Type')
 
@@ -277,8 +275,9 @@ df_gg%>%filter(!Type %in% c('Deciduous_Forest','Mixed_Forest'))%>%
 # but only if the predictors that hadthe most change between 2008 and 2022 
 # are in the top correlates/models? Or does it not matter?
 
+####~~~~ Recreating the GAGES II predictor set ~~~~####
 
-#### recreating the GAGES II predictor set ####
+#### Reading in GAGES II predictor set used in analysis and makeing table ####
 
 # these are the GAES II predictors:
 
@@ -333,22 +332,184 @@ var_desc %>%
   kable_classic(html_font = 'Times', font_size = 14, full_width = F)%>%
   row_spec(seq(1,nrow(var_desc),2), background="#FF000020")
 
-
-
-
-
-
-#### Land use ####
+####~~~ GAGES II Land Use - NLCD and CDL from reclass CDL and regular CDL, resp. ~~~####
 
 # recreating the GAGES II land use predictors: 
 # using the 2008 CDL data:
-# The CDL reclass can be used for the NLCD ones and the non-reclass
-# can be used for the CDL ones:
+# The CDL reclass can be used for the NLCD ones and
+# the non-reclass can be used for the CDL ones:
 
-# reclass:
+# **NOTE*
+# the CDL and NLCD differ in that the CDL combined Pasture and grassland while the nLCD does not
+# thus, even though the CDL can be agrgated to get close to the NLCD, I would need to do NLCD to get exactly like GAGES
+# here is a test of howclose I can get CDL to NLCD
 
-G2_landuse<-df.NWIS.CDL.2008.reclass
+####~~ Test of howclose I can get CDL to NLCD ~~####
 
+# the CDL reclass are in this df:
+
+df.NWIS.CDL.2008.reclass
+
+# compare them to the GAGES II NLCD ones (again, where we can, see above note):to do this:
+
+temp<-df.G2.reduced%>%select(STAID, names(df.G2.reduced)[c(8:11,18,19,21,22)])%>% # create a df of just the NLCD GAGES II predictors,
+  mutate_all(~ ifelse(is.numeric(.), round(.*0.01, 2), .))%>% # convert to percent between 0-1 and round to match CDL reclass
+  mutate(G2_Wetlands_eq = WOODYWETNLCD06+EMERGWETNLCD06,# create combinaitons for pasture and wetlands
+         .keep = 'unused')%>%
+  left_join(., df.NWIS.CDL.reclass%>%select(Name, Developed, Forest, Ag, Water,Pasture, Wetlands_all, Other), by = c('STAID'='Name')) %>% # merge with CDL reclass to compare (and rearrange the columns of the right joined df):
+  mutate(Dev_diff = Developed - DEVNLCD06,
+         Forest_diff = Forest - FORESTNLCD06,
+         Ag_diff = Ag - PLANTNLCD06,
+         Water_diff =  Water - WATERNLCD06,
+         Pasture_diff = Pasture - PASTURENLCD06,
+         Wetlands_diff = Wetlands_all - G2_Wetlands_eq,
+         .keep = 'unused')
+
+# clearly, the NLCD and CDL arestruggling, even though I tried to tweak the reclassification matrix
+# thus I am going to do NLCD too:
+
+####~ NLCD: CDL intermission ~####
+
+#### NLCD ####
+
+# the CDL and NLCD differ in that the CDL combined Pasture and grassland while the nLCD does not
+# thus, even though the CDL can be agrgated to et close to the NLCD, I want to also have the nLCD
+# to the difference.
+
+# download: to do this:
+
+# NLCD is not working when trying to download based on the entire polygon df, so going to use lapply to download individually:
+
+l.rast.NWIS.NLCD.2006 <- lapply(seq_along(df.sf.NWIS$Name), \(i) get_nlcd(template = st_cast(df.sf.NWIS, "MULTIPOLYGON")[i,], label = as.character(i), year = 2006))
+l.rast.NWIS.NLCD.2016 <- lapply(seq_along(df.sf.NWIS$Name), \(i) get_nlcd(template = st_cast(df.sf.NWIS, "MULTIPOLYGON")[i,], label = as.character(i), year = 2016))
+
+save(l.rast.NWIS.NLCD.2006, file='Downloaded_Data/l.NWIS.NLCD.2006.Rdata')
+save(l.rast.NWIS.NLCD.2016, file='Downloaded_Data/l.NWIS.NLCD.2016.Rdata')
+
+# convert to SpatRasters:
+
+l.rast.NWIS.NLCD.2006<-lapply(l.rast.NWIS.NLCD.2006, rast)
+l.rast.NWIS.NLCD.2016<-lapply(l.rast.NWIS.NLCD.2016, rast)
+
+
+# see if 2006 and 2016 crs are the same:
+
+crs(l.rast.NWIS.NLCD.2006[[2]])
+crs(l.rast.NWIS.NLCD.2016[[2]])
+# yes
+
+# reproject to sample watershed vector data to match raster data:
+
+vect.NWIS<-vect(df.sf.NWIS) # need to first ininalize vect since sometimes reading in rdata file (terra issue)
+
+vect.NWIS.proj<-terra::project(vect.NWIS, crs(l.rast.NWIS.NLCD.2006[[1]]))
+
+# extract frequency tables for each sample watershed
+
+system.time({l.NWIS.NLCD.2006 <- lapply(seq_along(l.rast.NWIS.NLCD.2006), \(i) terra::extract(l.rast.NWIS.NLCD.2006[[i]], vect.NWIS.proj[i], ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2)))})
+system.time({l.NWIS.NLCD.2016 <- lapply(seq_along(l.rast.NWIS.NLCD.2016), \(i) terra::extract(l.rast.NWIS.NLCD.2016[[i]], vect.NWIS.proj[i], ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2)))})
+
+# save(l.NWIS.NLCD.2006, file = 'Processed_Data/l.NWIS.NLCD.2006.Rdata')
+# save(l.NWIS.NLCD.2016, file = 'Processed_Data/l.NWIS.NLCD.2016.Rdata')
+
+load("Processed_Data/l.NWIS.NLCD.2006.Rdata")
+load("Processed_Data/l.NWIS.NLCD.2016.Rdata")
+
+# reclassify: the GAGES II predictors for NLCD land use are the sum of a few NLCD classes (see the kable table of the variable descriptions made above). To do this:
+
+# create and ordered vector based on legend (legend comes from Ryan_funcitons.R)
+
+Class3.for.G2<-c("WATERNLCD06", "SNOWICENLCD06", rep("DEVNLCD06", 4), "BARRENNLCD06", "DECIDNLCD06", "EVERGRNLCD06", "MIXEDFORNLCD06", NA, "SHRUBNLCD06", "GRASSNLCD06", NA, NA, NA, "PASTURENLCD06", "CROPSNLCD06", "WOODYWETNLCD06", "EMERGWETNLCD06")
+
+# add an identifier to this vector so the column names are slightly different than the GAGES II predictors:
+
+Class3.for.G2<-paste0('R_', Class3.for.G2)
+
+# create a df from this vector (for latter use):
+
+df.Class3<-data.frame(Class = unique(Class3.for.G2)[complete.cases(unique(Class3.for.G2))])
+  
+# create new df from the legend dataframe:
+
+legend.for.G2<-legend%>%mutate(Class3 = Class3.for.G2)
+
+# reclassify the NLCD using this new legend and clean up the dataframe from the next step
+
+l.NWIS.NLCD.2006<-lapply(l.NWIS.NLCD.2006, \(i) left_join(as.data.frame(i), legend.for.G2%>%select(Class, Class3), by = 'Class')%>%mutate(Class = Class3)%>%select(-Class3)%>%group_by(Class)%>%summarise(Freq = sum(Freq)))
+l.NWIS.NLCD.2016<-lapply(l.NWIS.NLCD.2016, \(i) left_join(as.data.frame(i), legend.for.G2%>%select(Class, Class3), by = 'Class')%>%mutate(Class = Class3)%>%select(-Class3)%>%group_by(Class)%>%summarise(Freq = sum(Freq)))
+
+# add back missing varaibles using df.Class3:
+
+l.NWIS.NLCD.2006<-lapply(l.NWIS.NLCD.2006, \(i) left_join(df.Class3, i, by = 'Class')%>%replace(is.na(.), 0))
+l.NWIS.NLCD.2016<-lapply(l.NWIS.NLCD.2016, \(i) left_join(df.Class3, i, by = 'Class')%>%replace(is.na(.), 0))
+
+# pivot_wider the df in the lists,
+# add a Name column for the site,
+# and add new columns for FOREST, and PLANT:
+
+l.NWIS.NLCD.2006<-lapply(seq_along(l.NWIS.NLCD.2006), \(i) l.NWIS.NLCD.2006[[i]]%>%
+                           group_by(Class)%>%
+                           summarise(Freq = sum(Freq))%>%
+                           pivot_wider(names_from = Class, values_from = Freq)%>%
+                           mutate(Name = df.sf.NWIS$Name[i], .before = 1)%>%
+                           mutate(R_FORESTNLCD06 = R_DECIDNLCD06+R_EVERGRNLCD06+R_MIXEDFORNLCD06,
+                                  R_PLANTNLCD06 = R_PASTURENLCD06+R_CROPSNLCD06)%>%
+                           as.data.frame(.))
+l.NWIS.NLCD.2016<-lapply(seq_along(l.NWIS.NLCD.2016), \(i) l.NWIS.NLCD.2016[[i]]%>%
+                           group_by(Class)%>%
+                           summarise(Freq = sum(Freq))%>%
+                           pivot_wider(names_from = Class, values_from = Freq)%>%
+                           mutate(Name = df.sf.NWIS$Name[i], .before = 1)%>%
+                           mutate(R_FORESTNLCD06 = R_DECIDNLCD06+R_EVERGRNLCD06+R_MIXEDFORNLCD06,
+                                  R_PLANTNLCD06 = R_PASTURENLCD06+R_CROPSNLCD06)%>%
+                           as.data.frame(.))
+
+# bind the lists into a single dataframe
+# note some of the sites have different length dtaframes because they didnt have all the same number of NLCD classes. When binding rows this will give a dataframe of the maximum length and put NAs for sites where there wasn't a column: 
+
+df.NWIS.NLCD.2006<-bind_rows(l.NWIS.NLCD.2006)
+df.NWIS.NLCD.2016<-bind_rows(l.NWIS.NLCD.2016)
+
+# now compare to GAGES II:
+
+df.compare.G2to2006<-df.G2.reduced%>%select(STAID, names(df.G2.reduced)[c(8:11,18,19,21,22)])%>% # create a df of just the NLCD GAGES II predictors,
+  mutate_all(~ ifelse(is.numeric(.), round(.*0.01, 2), .))%>%
+  left_join(., df.NWIS.NLCD.2006, by = c('STAID'='Name'))%>%
+  pivot_longer(cols = -STAID)%>%
+  mutate(name = sub('*R_', '', name))%>%
+  group_by(STAID, name) %>%
+  summarise(diff = diff(value)) %>%
+  pivot_wider(names_from = name, values_from = diff) %>%
+  rename_at(-1, ~paste0(., "_diff"))%>%
+  mutate(across(where(is.numeric), round, 3))
+
+df.compare.G2to2016<-df.G2.reduced%>%select(STAID, names(df.G2.reduced)[c(8:11,18,19,21,22)])%>% # create a df of just the NLCD GAGES II predictors,
+  mutate_all(~ ifelse(is.numeric(.), round(.*0.01, 2), .))%>%
+  left_join(., df.NWIS.NLCD.2016, by = c('STAID'='Name'))%>%
+  pivot_longer(cols = -STAID)%>%
+  mutate(name = sub('*R_', '', name))%>%
+  group_by(STAID, name) %>%
+  summarise(diff = diff(value)) %>%
+  pivot_wider(names_from = name, values_from = diff) %>%
+  rename_at(-1, ~paste0(., "_diff"))%>%
+  mutate(across(where(is.numeric), round, 3))
+
+# plot as heatmap:
+
+df.compare.G2to2006%>%
+  pivot_longer(cols = -STAID)%>%
+  ggplot(., aes(x = STAID, y = name, fill = value)) +
+  geom_tile()+
+  scale_fill_gradient2(low = "red", high = "yellow")
+
+df.compare.G2to2016%>%
+  pivot_longer(cols = -STAID)%>%
+  ggplot(., aes(x = STAID, y = name, fill = value)) +
+  geom_tile()+
+  scale_fill_gradient2(low = "red", high = "yellow")
+
+####~ Back to CDL ~####
+         
 # non-reclass:
 # the CDL ones in gauges 2 do not match the CDL names :/
 
@@ -376,7 +537,6 @@ G2_landuse<-G2_landuse%>%left_join(., df.NWIS.CDL.2008%>%select(keep), by = 'Nam
 G2_landuse[is.na(G2_landuse)]<-0
 
 
-p#
 
 
 
@@ -388,96 +548,6 @@ p#
 
 
 
-
-
-
-#### NLCD ####
-
-# the CDL and NLCD differ in that the CDL combined Pasture and grassland while the nLCD does not
-# thus, even though the CDL can be agrgated to et close to the NLCD, I want to also have the nLCD
-# to the difference.
-
-# note: the 53 sites post filtering based onthe CDLdate are used in this workflow
-
-# I am going to run this workflow for NLCD 2019 and NLCD 2001 to see if any sites had major changes in land use:
-
-# download: to do this:
-# NLCD is not working when trying to download based on the entire polygon df, so going to use lapply to download individually:
-
-l.rast.NWIS.NLCD.2019 <- lapply(seq_along(df.sf.NWIS.keep$Name), \(i) get_nlcd(template = st_cast(df.sf.NWIS.keep, "MULTIPOLYGON")[i,], label = as.character(i), year = 2019))
-l.rast.NWIS.NLCD.2001 <- lapply(seq_along(df.sf.NWIS.keep$Name), \(i) get_nlcd(template = st_cast(df.sf.NWIS.keep, "MULTIPOLYGON")[i,], label = as.character(i), year = 2001))
-
-# save(l.rast.NWIS.NLCD.2019, file='Downloaded_Data/l.rast.NWIS.NLCD.2019.Rdata')
-# save(l.rast.NWIS.NLCD.2001, file='Downloaded_Data/l.rast.NWIS.NLCD.2001.Rdata')
-
-# convert to SpatRasters:
-
-l.rast.NWIS.NLCD.2019<-lapply(l.rast.NWIS.NLCD.2019, rast)
-l.rast.NWIS.NLCD.2001<-lapply(l.rast.NWIS.NLCD.2001, rast)
-
-# plot
-
-# plot(rast.NWIS.NLCD.2019)
-
-# see if 2001 and 2019 crs are the same:
-
-crs(l.rast.NWIS.NLCD.2019[[2]])
-crs(l.rast.NWIS.NLCD.2001[[2]])
-
-# reproject to sample watershed vector data to match raster data:
-
-vect.NWIS<-vect(df.sf.NWIS.keep) # need to first ininalize vect since sometimes reading in rdata file (terra issue)
-
-vect.NWIS.proj<-terra::project(vect.NWIS, crs(l.rast.NWIS.NLCD.2019[[1]]))
-
-# extract frequency tables for each sample watershed
-
-system.time({l.NWIS.NLCD.2019 <- lapply(seq_along(l.rast.NWIS.NLCD.2019), \(i) terra::extract(l.rast.NWIS.NLCD.2019[[i]], vect.NWIS.proj[i], ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2)))})
-system.time({l.NWIS.NLCD.2001 <- lapply(seq_along(l.rast.NWIS.NLCD.2001), \(i) terra::extract(l.rast.NWIS.NLCD.2001[[i]], vect.NWIS.proj[i], ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2)))})
-
-# save(l.NWIS.NLCD.2019, file = 'Processed_Data/l.NWIS.NLCD.2019.Rdata')
-# save(l.NWIS.NLCD.2001, file = 'Processed_Data/l.NWIS.NLCD.2001.Rdata')
-
-load("Processed_Data/l.NWIS.NLCD.2019.Rdata")
-load("Processed_Data/l.NWIS.NLCD.2001.Rdata")
-
-# reclassify: to do this:
-
-# adjust the NLCD reclassify legend to match the CDL reclassify df made above:
-
-legend.NWIS<-legend; legend.NWIS$Class3[c(13,17)]<-'Pasture';legend.NWIS$Class3[14]<-'Other';legend.NWIS$Class3[1]<-'Water';legend.NWIS$Class3[c(19,20)]<-'Wetlands_all'
-
-sort(unique(legend.NWIS$Class3))==sort(unique(reclass_CDL$Crop))
-
-# looks good
-
-# reclassify the NLCD using this new legend and clean up the dataframe from the next step
-
-l.NWIS.NLCD.2019<-lapply(l.NWIS.NLCD.2019, \(i) left_join(as.data.frame(i), legend.NWIS%>%select(Class, Class3), by = 'Class')%>%mutate(Class = Class3)%>%select(-Class3))
-l.NWIS.NLCD.2001<-lapply(l.NWIS.NLCD.2001, \(i) left_join(as.data.frame(i), legend.NWIS%>%select(Class, Class3), by = 'Class')%>%mutate(Class = Class3)%>%select(-Class3))
-
-# pivot_wider the df in the lists and add a Name column for the site:
-
-l.NWIS.NLCD.2019<-lapply(seq_along(l.NWIS.NLCD.2019), \(i) l.NWIS.NLCD.2019[[i]]%>%group_by(Class)%>%summarise(Freq = sum(Freq))%>%pivot_wider(names_from = Class, values_from = Freq)%>%mutate(Name = df.sf.NWIS.keep$Name[i], .before = 1)%>%as.data.frame(.))
-l.NWIS.NLCD.2001<-lapply(seq_along(l.NWIS.NLCD.2001), \(i) l.NWIS.NLCD.2001[[i]]%>%group_by(Class)%>%summarise(Freq = sum(Freq))%>%pivot_wider(names_from = Class, values_from = Freq)%>%mutate(Name = df.sf.NWIS.keep$Name[i], .before = 1)%>%as.data.frame(.))
-
-# bind the lists into a single dataframe
-# note some of the sites have different length dtaframes because they didnt have all the same number of NLCD classes. When binding rows this will give a dataframe of the maximum length and put NAs for sites where there wasn't a column: 
-
-df.NWIS.NLCD.2019<-bind_rows(l.NWIS.NLCD.2019)
-df.NWIS.NLCD.2001<-bind_rows(l.NWIS.NLCD.2001)
-
-# create a list of these two dataframes:
-
-l.NWIS.NLCD<-list(df.NWIS.NLCD.2019,df.NWIS.NLCD.2001)%>%purrr::set_names(c('2019','2001'))
-
-# save thisprocessed list:
-
-# save(l.NWIS.NLCD, file='Processed_Data/l.NWIS.NLCD.Rdata')
-
-load('Processed_Data/l.NWIS.NLCD.Rdata')
-
-#
 
 
 

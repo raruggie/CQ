@@ -318,3 +318,9 @@ normalized<-function(y) {
 }
 
 
+add_columns <- function(df, columns){
+  new <- rep(NA_character_, length(columns))
+  names(new) <- columns
+  mutate(df, !!!new)
+}
+

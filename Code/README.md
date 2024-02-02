@@ -21,11 +21,12 @@ The addiitonal NWIS.R files, which have the consituent name afer (e.g. NWIS_N03.
 
 NWIS_ALL.R file: this is used to take a look at the 17 sites that overlapped between TP, TN, and SRP
 
-NWIS_Datalayers_Download.R file:
+NWIS_Datalayers.R file:
 - Download an early and recent CDL for a df of watershed shapefiles
 - regular and reclassified analysis of the CDL
 - heatmap of the difference between early and recent CDLs
 - recreating the GAGES II predictors: 
+ - make a table of the predictors (including adding descirptions for the predictors I made myself by summing some of the GAGES ones (e.g. RIP)
  - land use: using plain CDL for GAGES II CDL and reclassified CDL for GAGES NLCD 06
  - elevation: NED
 

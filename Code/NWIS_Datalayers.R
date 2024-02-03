@@ -275,6 +275,34 @@ df_gg%>%filter(!Type %in% c('Deciduous_Forest','Mixed_Forest'))%>%
 # but only if the predictors that hadthe most change between 2008 and 2022 
 # are in the top correlates/models? Or does it not matter?
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ####~~~~ Recreating the GAGES II predictor set ~~~~####
 
 #### Reading in GAGES II predictor set used in analysis and makeing table ####
@@ -312,7 +340,6 @@ x<-c('Mainstem and Ripairan percent developed (Ryan created it from MAIN_DEV_ an
   'Mainstem and Ripairan percent forest (Ryan created it from MAIN_FOR_ and RIP_FOR_ 100 and 800 GAGES II variables',
   'Mainstem and Ripairan percent agriculture (Ryan created it from MAIN_PLANT_ and RIP_PLANT_ 100 and 800 GAGES II variables',
   'Watershed percent crops not affiliated with dairy agriculture (Ryan created from potatoes, cabbange, grapes, etc.)')
-
 
 # create a dataframe to bind_rows with var_desc:
 
@@ -365,8 +392,13 @@ temp<-df.G2.reduced%>%select(STAID, names(df.G2.reduced)[c(8:11,18,19,21,22)])%>
          Wetlands_diff = Wetlands_all - G2_Wetlands_eq,
          .keep = 'unused')
 
-# clearly, the NLCD and CDL arestruggling, even though I tried to tweak the reclassification matrix
-# thus I am going to do NLCD too:
+temp%>%
+  pivot_longer(cols = -STAID)%>%
+  ggplot(., aes(x = STAID, y = name, fill = value)) +
+  geom_tile()+
+  scale_fill_gradient2(low = "red", high = "yellow")
+
+# Even though I tried to tweak the reclassification matrix I am going to do NLCD too:
 
 ####~ NLCD: CDL intermission ~####
 
@@ -380,34 +412,34 @@ temp<-df.G2.reduced%>%select(STAID, names(df.G2.reduced)[c(8:11,18,19,21,22)])%>
 
 # NLCD is not working when trying to download based on the entire polygon df, so going to use lapply to download individually:
 
-l.rast.NWIS.NLCD.2006 <- lapply(seq_along(df.sf.NWIS$Name), \(i) get_nlcd(template = st_cast(df.sf.NWIS, "MULTIPOLYGON")[i,], label = as.character(i), year = 2006))
-l.rast.NWIS.NLCD.2016 <- lapply(seq_along(df.sf.NWIS$Name), \(i) get_nlcd(template = st_cast(df.sf.NWIS, "MULTIPOLYGON")[i,], label = as.character(i), year = 2016))
+# l.rast.NWIS.NLCD.2006 <- lapply(seq_along(df.sf.NWIS$Name), \(i) get_nlcd(template = st_cast(df.sf.NWIS, "MULTIPOLYGON")[i,], label = as.character(i), year = 2006))
+# l.rast.NWIS.NLCD.2016 <- lapply(seq_along(df.sf.NWIS$Name), \(i) get_nlcd(template = st_cast(df.sf.NWIS, "MULTIPOLYGON")[i,], label = as.character(i), year = 2016))
 
-save(l.rast.NWIS.NLCD.2006, file='Downloaded_Data/l.NWIS.NLCD.2006.Rdata')
-save(l.rast.NWIS.NLCD.2016, file='Downloaded_Data/l.NWIS.NLCD.2016.Rdata')
+# save(l.rast.NWIS.NLCD.2006, file='Downloaded_Data/l.NWIS.NLCD.2006.Rdata')
+# save(l.rast.NWIS.NLCD.2016, file='Downloaded_Data/l.NWIS.NLCD.2016.Rdata')
 
 # convert to SpatRasters:
 
-l.rast.NWIS.NLCD.2006<-lapply(l.rast.NWIS.NLCD.2006, rast)
-l.rast.NWIS.NLCD.2016<-lapply(l.rast.NWIS.NLCD.2016, rast)
-
+# l.rast.NWIS.NLCD.2006<-lapply(l.rast.NWIS.NLCD.2006, rast)
+# l.rast.NWIS.NLCD.2016<-lapply(l.rast.NWIS.NLCD.2016, rast)
 
 # see if 2006 and 2016 crs are the same:
 
-crs(l.rast.NWIS.NLCD.2006[[2]])
-crs(l.rast.NWIS.NLCD.2016[[2]])
+# crs(l.rast.NWIS.NLCD.2006[[2]])
+# crs(l.rast.NWIS.NLCD.2016[[2]])
+
 # yes
 
 # reproject to sample watershed vector data to match raster data:
 
-vect.NWIS<-vect(df.sf.NWIS) # need to first ininalize vect since sometimes reading in rdata file (terra issue)
-
-vect.NWIS.proj<-terra::project(vect.NWIS, crs(l.rast.NWIS.NLCD.2006[[1]]))
+# vect.NWIS<-vect(df.sf.NWIS) # need to first ininalize vect since sometimes reading in rdata file (terra issue)
+# 
+# vect.NWIS.proj<-terra::project(vect.NWIS, crs(l.rast.NWIS.NLCD.2006[[1]]))
 
 # extract frequency tables for each sample watershed
 
-system.time({l.NWIS.NLCD.2006 <- lapply(seq_along(l.rast.NWIS.NLCD.2006), \(i) terra::extract(l.rast.NWIS.NLCD.2006[[i]], vect.NWIS.proj[i], ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2)))})
-system.time({l.NWIS.NLCD.2016 <- lapply(seq_along(l.rast.NWIS.NLCD.2016), \(i) terra::extract(l.rast.NWIS.NLCD.2016[[i]], vect.NWIS.proj[i], ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2)))})
+# system.time({l.NWIS.NLCD.2006 <- lapply(seq_along(l.rast.NWIS.NLCD.2006), \(i) terra::extract(l.rast.NWIS.NLCD.2006[[i]], vect.NWIS.proj[i], ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2)))})
+# system.time({l.NWIS.NLCD.2016 <- lapply(seq_along(l.rast.NWIS.NLCD.2016), \(i) terra::extract(l.rast.NWIS.NLCD.2016[[i]], vect.NWIS.proj[i], ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2)))})
 
 # save(l.NWIS.NLCD.2006, file = 'Processed_Data/l.NWIS.NLCD.2006.Rdata')
 # save(l.NWIS.NLCD.2016, file = 'Processed_Data/l.NWIS.NLCD.2016.Rdata')
@@ -509,50 +541,64 @@ df.compare.G2to2016%>%
   scale_fill_gradient2(low = "red", high = "yellow")
 
 ####~ Back to CDL ~####
-         
-# non-reclass:
-# the CDL ones in gauges 2 do not match the CDL names :/
 
+# the CDL ones in GAGES II do not match the CDL names :/
+# to match them up:
+
+# get just the names of the crop from the GAGESII CDL ones:
+
+v<-names(df.G2.reduced)
 cdl_names <- grep("^CDL", v)
-
 v <- v[cdl_names]
+v_suffix<-sub("^CDL_", "", v)
 
-v<-sub("^CDL_", "", v)
+# now look at the two and compare:
 
-v
+v_suffix # GAGES II suffix
 
-names(df.NWIS.CDL.2008)
+names(df.NWIS.CDL.2008) # CDL datalayers
 
-# Soybeans, Corn, Alfalfa, Spring_Wheat, Other_Hay/Non_Alfalfa, Grassland/Pasture, Dbl_Crop_WinWht/Soybeans, Winter_Wheat,
-# ALL_OTHER_LAND is non-crop land
+# Soybeans, Corn, Alfalfa, Spring_Wheat, Other_Hay/Non_Alfalfa, Grassland/Pasture, Dbl_Crop_WinWht/Soybeans, Winter_Wheat
+# *note*: ALL_OTHER_LAND is non-crop land, so excluding
 
-# now add just these columns to the G2 dataframe:
+# now extract just these from the CDL datalayers df:
 
-keep<-c('Name', 'Soybeans', 'Corn', 'Alfalfa','Spring_Wheat', 'Other_Hay/Non_Alfalfa', 'Grassland/Pasture', 'Dbl_Crop_WinWht/Soybeans', 'Winter_Wheat')
+keep<-c('Name', 'Corn', 'Soybeans', 'Spring_Wheat', 'Winter_Wheat', 'Dbl_Crop_WinWht/Soybeans', 'Alfalfa', 'Other_Hay/Non_Alfalfa', 'Grassland/Pasture')
 
-G2_landuse<-G2_landuse%>%left_join(., df.NWIS.CDL.2008%>%select(keep), by = 'Name')
+temp<-df.NWIS.CDL.2008%>%select(keep)
 
-# set NAs to zero:
+# rename them to the GAGES II CDL names with a unique ID for it being the datalayers one ([-9] to remove ALL_OTHER_LAND):
 
-G2_landuse[is.na(G2_landuse)]<-0
+names(temp)<-paste0('R_', c('Name', v[-9]))
 
+# now add these columns to the GAGES II df to compare:
+# also set NA to zero and round to 2 decimial places:
 
+df.compare.G2toCDL<-left_join(df.G2.reduced%>%
+                                select(STAID, v[-9])%>%
+                                mutate_all(~ ifelse(is.numeric(.), round(.*0.01, 2), .)), temp, by = c('STAID'='R_Name'))%>%
+  replace(is.na(.), 0)%>%
+  mutate(across(where(is.numeric), round, 2))
 
+# now compare GAGES II to CDL:
 
+df.compare.G2toCDL<-df.compare.G2toCDL%>%
+  pivot_longer(cols = -STAID)%>%
+  mutate(name = sub('*R_', '', name))%>%
+  group_by(STAID, name) %>%
+  summarise(diff = diff(value)) %>%
+  pivot_wider(names_from = name, values_from = diff) %>%
+  rename_at(-1, ~paste0(., "_diff"))
 
+# and heat map:
 
+df.compare.G2toCDL%>%
+  pivot_longer(cols = -STAID)%>%
+  ggplot(., aes(x = STAID, y = name, fill = value)) +
+  geom_tile()+
+  scale_fill_gradient2(low = "red", high = "yellow")
 
-
-
-
-
-
-
-
-
-
-
-
+#
 
 
 

@@ -433,7 +433,7 @@ cor(x$PLANTNLCD06, x$ELEV_MEDIAN_M_BASIN)
 
 # make triangle plot for this!:
 
-df.tri.4.proxy<-left_join(df.tri.4, df.G2.reduced%>%select(STAID, ELEV_MEDIAN_M_BASIN, ELE), by = c('site_no'='STAID'))
+df.tri.4.proxy<-left_join(df.tri.4, df.G2.reduced%>%select(STAID, ELEV_MEDIAN_M_BASIN), by = c('site_no'='STAID'))
 
 p.4<-ggplot(df.tri.4.proxy, aes(x=DEVNLCD06, y=PLANTNLCD06)) +
   geom_point(aes(color=ELEV_MEDIAN_M_BASIN, size = 4)) +
@@ -450,7 +450,6 @@ p.4
 
 # just do ggplotbiplots:
 
-
 p.4<-ggplot(df.tri.4.proxy, aes(x=PLANTNLCD06, y=ELEV_MEDIAN_M_BASIN)) +
   geom_point() +
   facet_wrap('Consit', scales = 'fixed')+
@@ -464,17 +463,127 @@ p.4<-ggplot(df.tri.4.proxy, aes(x=PLANTNLCD06, y=ELEV_MEDIAN_M_BASIN)) +
 
 p.4
 
+####~~ Make plots from meetings ~~####
 
+#### 1) load against flow colored by season for 6 sites in poster ####
 
+# not including comments since I did all of this above, justneed to redo it because I wrote over df_Seg.2:
 
+load('Processed_Data/TP.df_Seg.2.Rdata')
+df.sf.NWIS<-df.sf.NWIS%>%left_join(., df_Seg.2%>%distinct(site, .keep_all = T)%>%select(site, USGS.LU.Adjusted, Type), by = c('Name'='site'))
+df.points<-df.points%>%left_join(., df_Seg.2%>%distinct(site, .keep_all = T)%>%select(site, USGS.LU.Adjusted, Type), by = c('site_no'='site'))
+df.points$station_nm[31]<-"LITTLE BEAVER KILL AT\nBEECHFORD NEAR MT TREMPER NY"
+load('Processed_Data/df.tri.Rdata')
+df.tri.TP<-df.tri
+df_Seg.2<-left_join(df_Seg.2, df.tri.TP%>%select(site_no, Slope), by = c('site' = 'site_no'))
+df_Seg.2<-left_join(df_Seg.2, df.points%>%select(site_no,station_nm, drain_area_va), by = c('site'='site_no'))%>%
+  mutate(site_no = site, .after = 2)%>% # preseve column with just site number
+  mutate(site = paste0(site, ' ', station_nm, '\nDA = ', drain_area_va, ' sqmi, TP Export Regime = ', Type, ' (Slope = ', Slope, ')', '\nMajor Land Use in Watershed = ', USGS.LU.Adjusted))
+df_Seg.2<-df_Seg.2%>%mutate(site = factor(site, levels = unique(site[order(drain_area_va)])))
+df_Seg.2<-df_Seg.2%>%mutate(Q_mm_day= Q_real * (1/(drain_area_va*2.59)) * 2, .after = Q_real)
+keep<-c("04249000", "01357500", "01362497", "04231000", "04269000", "04232050")
+keep_names<-c("Oswego", 'Mohawk', 'LBK', 'Black', 'SRR', 'Allen')
+df_keep<-data.frame(keep, keep_names)
+df_Seg.2<-filter(df_Seg.2, site_no %in% keep)%>%mutate(Date = as.Date(Date))%>%mutate(Season = getSeason(Date), .after = Date)
 
+p<-ggplot(df_Seg.2, aes(x = Q_mm_day, y = C*Q_mm_day, color = Season))+
+  geom_point()+
+  scale_x_log10(
+    breaks = scales::trans_breaks("log10", function(x) 10^x),
+    labels = scales::trans_format("log10", scales::math_format(10^.x))
+  )+
+  scale_y_log10(
+    breaks = scales::trans_breaks("log10", function(x) 10^x),
+    labels = scales::trans_format("log10", scales::math_format(10^.x))
+  )+
+  ylab('TP Load (mg/L * mm/day)')+
+  xlab('Discharge (mm/day)')+
+  geom_smooth(method = 'lm')+
+  new_scale_color() +
+  # geom_line(aes(x = Q, y = Seg_C), size = 2.5, color = 'black')+
+  # geom_line(aes(x = Q, y = Seg_C, color = slope_angle), size = 2)+
+  # scale_color_manual(name = "Slope Angle", values = hc)+
+  facet_wrap('site', scales = 'fixed', ncol = 2, dir="v")+
+  theme(
+    strip.background = element_blank(),
+    strip.text.x = element_blank() #,
+    # legend.position="none"
+  )+
+# geom_rect(data = df_Seg.2%>%distinct(df_Seg.2$site, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, fill = USGS.LU.Adjusted), alpha = .35)+
+# scale_fill_manual(name = "USGS Landuse\n(Adjusted)", values = c("red", "blue","yellow", "green"))+
+# guides(fill=guide_legend(nrow=2,byrow=TRUE)) +
+  ggtitle('Load against flow colored by season for 6 sites in poster')
+  
+p
 
+#### 2) Conc and loads against time colored by site ####
 
+ggplot(df_Seg.2, aes(x = Date, y = C, color = site))+
+  geom_point()+
+  ggtitle('Conc against time colored by site for 6 sites in poster')+
+  theme(
+    legend.position="bottom"
+  )
 
+ggplot(df_Seg.2, aes(x = Date, y = C*Q_mm_day, color = site))+
+  geom_point()+
+  ggtitle('Load against time colored by site for 6 sites in poster')+
+  theme(
+    legend.position="bottom"
+  )
 
+#### 3) Load against EP ####
 
+# load in daily flow data:
 
+df.NWIS.Q<-read.csv("C:/PhD/CQ/Raw_Data/df.NWIS.Q.csv", colClasses = c(site_no = "character"))
 
+# filter to the 6 sites:
+
+temp<-filter(df.NWIS.Q, site_no %in% keep)%>%mutate(Date = as.Date(Date))
+
+# split into lists by site:
+
+temp<-split(temp, f = temp$site_no) 
+
+# sort each dataframe in the list by the flow, add a column for m and n, convert back to a dataframe using bind_rows, and select only the needed columns for the left join (next step):
+
+temp<-bind_rows(lapply(temp, \(i) i[order(i$X_00060_00003,decreasing = T),]%>%mutate(m = 1:n(), n = n())))%>%select(site_no, Date, m, n)
+
+# append the value of M and n for each C-Q observation in the C-Q dataframe:
+# need to rename the n column in the left dataframe as well:
+
+temp<-left_join(df_Seg.2%>%rename(n_samples = n), temp, by = c("site_no", "Date"))
+
+# calcualte the exceednce proability for Q for each C observation:
+
+temp$EP<-round(temp$m/(temp$n+1), 4)
+
+# make plot:
+
+p<-ggplot(temp, aes(x = EP, y = C*Q_mm_day, color = Season))+
+  geom_point()+
+  scale_x_log10(
+    breaks = scales::trans_breaks("log10", function(x) 10^x),
+    labels = scales::trans_format("log10", scales::math_format(10^.x))
+  )+
+  scale_y_log10(
+    breaks = scales::trans_breaks("log10", function(x) 10^x),
+    labels = scales::trans_format("log10", scales::math_format(10^.x))
+  )+
+  scale_x_reverse()+
+  ylab('TP Load (mg/L * mm/day)')+
+  xlab('Exccedence Probability')+
+  # geom_smooth(method = 'lm')+
+  facet_wrap('site', scales = 'fixed', ncol = 2, dir="v")+
+  theme(
+    strip.background = element_blank(),
+    strip.text.x = element_blank() #,
+    # legend.position="none"
+  )+
+  ggtitle('Load against flow colored by season for 6 sites in poster')
+
+p
 
 
 

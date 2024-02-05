@@ -1136,7 +1136,7 @@ p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
     strip.text.x = element_blank()
   )
 
-# p
+p
 
 # looking at this plot I want to add a fourth CQ type for complex, if the slopes of the BP analysis look widely different. 
 # I will start with calcuating the angle between pre-post BP slope and see which sites get signled out:
@@ -1410,9 +1410,110 @@ tab_model(m.list, dv.labels = names(m.list), title = paste('Comparison of MLR mo
 
 # export m.list for use in Code/FingerLakesPresentation.R:
 
-save(m.list, file = 'Processed_Data/m.list.TP.Rdata')
+# save(m.list, file = 'Processed_Data/m.list.TP.Rdata')
 
 #
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### MLR with observations greater than the median ####
+
+# determine the median flow rate for each sites CQ observations: to do this:
+
+df.TP_CQ.top50<-split(df.TP_CQ, f = df.TP_CQ$Name)%>% # split the df into list of dfs for each site, 
+  lapply(., \(i) i%>%filter(X_00060_00003>median(i$X_00060_00003)))%>% # filter to the median flow rate for each site,
+  bind_rows(.) # bind back into single dataframe:
+
+# now run through grouping CQ workflow with this truncated df:
+
+l.TP_CQ<-df.TP_CQ.top50%>%split(., .$Name) # resplit the df into list:
+l.TP_CQ.lm<-lapply(l.TP_CQ, \(i) lm(log_C~log_Q, data=i)) # create lm models for each site:
+TP_CQ.coef<-as.data.frame(bind_rows(lapply(l.TP_CQ.lm, \(i) summary(i)$coefficients[,1]), .id = 'site_no'))%>%rename(Intercept = 2, Slope = 3) # save the model coef ad pvals:
+TP_CQ.pvals<-as.data.frame(bind_rows(lapply(l.TP_CQ.lm, \(i) summary(i)$coefficients[,4]), .id = 'site_no'))%>%rename(Intercept.pval = 2, Slope.pval = 3) # save the pvalues 
+df.lm<-left_join(TP_CQ.coef,TP_CQ.pvals,by='site_no')%>%left_join(., df.TP_CQ%>%select(Name, n_sample_rank)%>%distinct(., .keep_all = T), by = c('site_no' = 'Name')) # merge the two dfs:
+df.lm<-mutate(df.lm, Type_top50 = ifelse(Slope.pval>0.05, 'Stationary', ifelse(Slope>0, 'Mobilization', 'Dilution'))) # add column for CQ type:
+df.TP_CQ.top50<-left_join(df.TP_CQ.top50,df.lm%>%select(site_no, Type_top50),by=c('Name'='site_no')) # merge CQ type labels to the df for plotting
+
+# here is where it changes: add another column for the y coordinates of the OLS line for just the top 50 percentile:
+
+temp<-lapply(seq_along(l.TP_CQ.lm), \(i) data.frame(Seg_C_log_top50 = fitted(l.TP_CQ.lm[[i]]), l.TP_CQ[[i]]$sample_dt))%>%
+  purrr::set_names(names(l.TP_CQ.lm))%>%
+  bind_rows(., .id = 'Name')%>%
+  rename(site = Name, Date = 3)%>%
+  mutate(Date = as.Date(Date))
+
+# now add upper 50 CQ type and Seg_C_log_top50 columns to df_Seg.2:
+  
+df_Seg.2<-left_join(df_Seg.2, df.lm%>%select(site_no, Type_top50), by = c('site'='site_no'))%>%
+  mutate(Date = as.Date(Date))%>%
+  left_join(., temp, by = c('site', 'Date'))
+
+# make plot:
+
+p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
+  geom_point()+
+  geom_smooth(aes(color = Type),method = 'lm')+
+  scale_color_manual(name = "Full CQ Type", values = c("red", "blue", "green"))+
+  ylab('log(TP)')+
+  new_scale_color() +
+  geom_line(aes(x = log(Q_real), y = Seg_C_log_top50), size = 2.5, color = 'black')+
+  geom_line(aes(x = log(Q_real), y = Seg_C_log_top50, color = Type_top50), size = 2)+
+  scale_color_manual(name = "Top 50 CQ Type", values = c("blue", "green"))+
+  facet_wrap(dplyr::vars(n_sample_rank), scales = 'free')+
+  theme(
+    strip.background = element_blank(),
+    strip.text.x = element_blank()
+  )
+
+p
+
+# export this df_Seg.2 for use in FingerLakesPresentation.R
+
+save(df_Seg.2, file = 'Processed_Data/TP.df_Seg.2.w_top50.Rdata')
+
+
+#
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4709,12 +4810,13 @@ p1<-ggplot(df_Seg.2, aes(x = EP, y = log(C)))+
 
 p1
 
-# save(p1, file = 'Processed_Data/p1.Rdata')
+save(p1, file = 'Processed_Data/p1.Rdata')
 
+load('Processed_Data/p1.Rdata')
 
+p
 
-
-
+#
 
 
 

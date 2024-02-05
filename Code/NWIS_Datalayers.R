@@ -623,17 +623,22 @@ df.compare.G2toCDL%>%
 
 # download:
 
-DEM.NWIS<-get_ned(df.sf.NWIS, label = '2') # already SpatRaster!
+# DEM.NWIS<-get_ned(df.sf.NWIS, label = '2') # already SpatRaster!
 
-writeRaster(DEM.NWIS, file='Downloaded_Data/DEM.NWIS.tif', overwrite=TRUE)
+# writeRaster(DEM.NWIS, file='Downloaded_Data/DEM.NWIS.tif', overwrite=TRUE)
 
-# plot(DEM.NWIS)
+# load in rast:
+
+DEM.NWIS<-rast('Downloaded_Data/DEM.NWIS.tif')
+
+plot(DEM.NWIS)
 
 # extract elevation metrics over each sample watershed: to do this:
 # build a function with multiple functions:
 
 f <- function(x, na.rm = T) {
   c(mean=mean(x, na.rm = na.rm),
+    median=median(x, na.rm = na.rm),
     range=max(x, na.rm = na.rm)-min(x, na.rm = na.rm),
     sd=sd(x, na.rm = na.rm)
   )
@@ -651,7 +656,7 @@ df.NWIS.DEM <- as.data.frame(terra::extract(DEM.NWIS, vect.NWIS.proj, f))
 
 # set the names of the df:
 
-names(df.NWIS.DEM)<-c('Name', 'Elev_Avg', 'Elev_Range', 'Elev_SD')
+names(df.NWIS.DEM)<-c('Name', 'Elev_Avg','Elev_Median', 'Elev_Range', 'Elev_SD')
 
 # set the names of the sites:
 
@@ -663,12 +668,28 @@ df.NWIS.DEM$Name<-df.sf.NWIS$Name
 
 load('Processed_Data/df.NWIS.DEM.Rdata')
 
+# compare to GAGES II:
+
+# Only the median and STD are in GAGES II:
+
+df.compare.G2toNED<-left_join(df.NWIS.DEM%>%select(c(1,3,5))%>%rename(R_ELEV_MEDIAN_M_BASIN = 2, R_ELEV_STD_M_BASIN = 3), df.G2.reduced%>%select(STAID, ELEV_MEDIAN_M_BASIN,ELEV_STD_M_BASIN), by = c('Name'='STAID'))%>%
+  mutate(across(where(is.numeric), round, 0))%>%
+  pivot_longer(cols = -Name)%>%
+  mutate(name = sub('*R_', '', name))%>%
+  group_by(Name, name) %>%
+  summarise(diff = diff(value)) %>%
+  pivot_wider(names_from = name, values_from = diff) %>%
+  rename_at(-1, ~paste0(., "_diff"))
+  
+# make heat map:
+
+df.compare.G2toNED%>%
+  pivot_longer(cols = -Name)%>%
+  ggplot(., aes(x = Name, y = name, fill = value)) +
+  geom_tile()+
+  scale_fill_gradient2(low = "red", high = "yellow")
+
 # done with DEM
-
-
-# read in watershed shapefiles:
-
-load('Processed_Data/NWIS_Watershed_Shapefiles.Rdata')
 
 
 

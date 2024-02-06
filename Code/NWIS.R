@@ -668,6 +668,7 @@ df_Seg<-left_join(df_Seg, temp[,c(1,3)], by = c('site'='site_no'))%>%
 
 
 #### Calculating Average Annual Consituent Yield ####
+
 # (for use in correlaitons and MLR)
 
 # step 1. calcualte average annual hydrograph for each site. to do this:
@@ -731,6 +732,79 @@ df.Yield <- lapply(l.Yield, sum)%>%dplyr::bind_rows(., .id = 'Name')%>%pivot_lon
 
 #
 
+#### Calculating Average Annual Consituent Yield for Top 50 ####
+
+# (for use in correlaitons and MLR)
+
+# step 1 from the previous section can be used here
+
+# step 2 needs to incorporate two linear models, bottom and top 50:
+
+l.C_daily.bottom50<-split(df.TP_CQ, f = df.TP_CQ$site_no)%>% # split the df into list of dfs for each site, 
+  lapply(., \(i) i%>%filter(X_00060_00003<median(i$X_00060_00003)))%>% # filter to the median flow rate for each site,
+  bind_rows(.)%>% # bind back into single dataframe:
+  rename(Name = site_no)%>%
+  select(Name, sample_dt,result_va, X_00060_00003)%>%
+  mutate(log_C = log(result_va), log_Q = log(X_00060_00003), C = result_va, Q = X_00060_00003)%>%
+  filter(is.finite(log_C))%>%
+  filter(is.finite(log_Q))%>%
+  split(., f =.$Name)%>%
+  lapply(., \(i) lm(log_C ~ log_Q, i))
+
+l.C_daily.top50<-split(df.TP_CQ, f = df.TP_CQ$site_no)%>% # split the df into list of dfs for each site, 
+  lapply(., \(i) i%>%filter(X_00060_00003>=median(i$X_00060_00003)))%>% # filter to the median flow rate for each site,
+  bind_rows(.)%>% # bind back into single dataframe:
+  rename(Name = site_no)%>%
+  select(Name, sample_dt,result_va, X_00060_00003)%>%
+  mutate(log_C = log(result_va), log_Q = log(X_00060_00003), C = result_va, Q = X_00060_00003)%>%
+  filter(is.finite(log_C))%>%
+  filter(is.finite(log_Q))%>%
+  split(., f =.$Name)%>%
+  lapply(., \(i) lm(log_C ~ log_Q, i))
+
+# make sure the order of the sites in the flow and lm lists are the same:
+
+names(l.C_daily.bottom50)==names(l.avg_ann_hydro)
+names(l.C_daily.top50)==names(l.avg_ann_hydro)
+
+# use this list to create list of bias correction factors:
+
+l.BCF.bottom50<-lapply(l.C_daily.bottom50, \(i) exp((summary(i)$sigma^2)/2))
+l.BCF.top50<-lapply(l.C_daily.top50, \(i) exp((summary(i)$sigma^2)/2))
+
+# create df of median Q for each site:
+
+df.median.Q<-df.TP_CQ%>%group_by(site_no)%>%summarise(median_Q=median(X_00060_00003))
+
+# predict the concentration for each day for each site: 
+# ifelse is used to determine if the average daily flow is less than median, use the model in bottom50, if equal to or above median use model in top50
+# this predicts the concnetration in log space, so transforming into real space here as well using BCF:
+
+l.C_daily<-lapply(seq_along(l.avg_ann_hydro), \(i) l.avg_ann_hydro[[i]]%>%mutate(C = ifelse(mean_Q < df.median.Q$median_Q[i], 
+                                                                                            l.BCF.bottom50[[i]]*exp(as.numeric(predict(l.C_daily.bottom50[[i]], data.frame(log_Q = log(l.avg_ann_hydro[[i]]$mean_Q))))),
+                                                                                            l.BCF.top50[[i]]*exp(as.numeric(predict(l.C_daily.top50[[i]], data.frame(log_Q = log(l.avg_ann_hydro[[i]]$mean_Q)))))
+                                                                                            )))%>%purrr::set_names(names(l.avg_ann_hydro))
+
+# I think this worked!! cause if I sub in NA for the else line in mutate, those rows are NA!
+
+# step 3. multiply predicted average daily C by daily Q to get daily load, sum up, then convert to yield. To do this:
+
+# set up list of vectors of drainage areas:
+
+l.DA<-readNWISsite(siteNumbers = names(l.C_daily))%>%select(site_no, drain_area_va)%>%split(., .$site_no)%>%lapply(., \(i) i$drain_area_va)
+
+# multiply daily C by daily Q and convert units:
+# mg/L * ft^3/sec * 28.3168 L/ft3 * 86400 sec /day * 1g/1000mg * 1kg/1000g * 1/mi^2 * 1mi^2/258.999 ha = kg/ha/day
+
+unit_conversion=28.3168*86400*(1/1000)*(1/1000)*(1/258.999)
+
+l.Yield<-lapply(names(l.C_daily), \(i) l.C_daily[[i]]$C*l.Q.temp[[i]]*(1/l.DA[[i]])*unit_conversion)%>%purrr::set_names(names(l.avg_ann_hydro))
+
+# sum up for the year and convert to df
+
+df.Yield.2model <- lapply(l.Yield, sum)%>%dplyr::bind_rows(., .id = 'Name')%>%pivot_longer(cols = everything(), names_to = 'Name', values_to = 'Yield') # units of kg/ha/year
+
+#
 
 
 
@@ -745,11 +819,9 @@ df.Yield <- lapply(l.Yield, sum)%>%dplyr::bind_rows(., .id = 'Name')%>%pivot_lon
 
 
 
-
-
-#####################################################
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #### Correlations ####
-#####################################################
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 # reduce the predictor set down to those we believe are defensible:
 
@@ -775,9 +847,9 @@ pred_to_keep<-c("HYDRO_DISTURB_INDX",
 
 pred_to_keep <- pred_to_keep[!(pred_to_keep %in% "STAID")]
 
-# removing the duplicates of DEV and PDEN
+# removing the duplicates of DEV and PDEN, and also CDL_WWHT_SOY_DBL_CROP
 
-pred_to_keep <- pred_to_keep[!(pred_to_keep %in% c("DEVOPENNLCD06","DEVLOWNLCD06","DEVMEDNLCD06","DEVHINLCD06", "PDEN_DAY_LANDSCAN_2007", "PDEN_NIGHT_LANDSCAN_2007"))]
+pred_to_keep <- pred_to_keep[!(pred_to_keep %in% c("DEVOPENNLCD06","DEVLOWNLCD06","DEVMEDNLCD06","DEVHINLCD06", "PDEN_DAY_LANDSCAN_2007", "PDEN_NIGHT_LANDSCAN_2007", "CDL_WWHT_SOY_DBL_CROP"))]
 
 # filtering df.G2 to this predictor list:
 
@@ -802,7 +874,7 @@ names(df.G2.reduced)
 
 # export this predictor set for the 42 sites:
 
-save(df.G2.reduced, file = 'Processed_Data/df.G2.reduced.Rdata')
+# save(df.G2.reduced, file = 'Processed_Data/df.G2.reduced.Rdata')
 
 # combined the reduced predictors df with the already filtered CQ data:
 
@@ -945,26 +1017,26 @@ df.OLS_Sens%>%
 
 # number<-5
 
-make_plot<-function(number){
-  
-  OLS<-l.cor[[number]]%>%arrange(desc(Spearman_Correlation))
-  
-  x<-df.OLS_Sens%>%
-    select(Name, OLS$CQ_Parameter[1], OLS$term)%>%
-    pivot_longer(cols = c(3:last_col()), names_to = 'Type', values_to = 'Value')%>%
-    drop_na(Value)%>%
-    # mutate_if(is.numeric, ~replace(., . == 0, NA))%>%
-    left_join(., OLS%>%select(term, Spearman_Correlation), by = c('Type'='term'))%>%
-    mutate(Type = factor(Type, levels=unique(Type[order(-Spearman_Correlation,Type)]), ordered=TRUE))%>%
-    ggplot(., aes(x = Value, y = !!sym(OLS$CQ_Parameter[1])))+
-    geom_smooth(method = 'lm')+
-    geom_point()+
-    facet_wrap('Type', scales = 'free')+
-    ggtitle(paste('Univariate plots of', OLS$CQ_Parameter[1], 'against Top Gauges 2 Correlates for', OLS$CQ_Parameter[1], 'ordered from highest to lowest Spearman Rank Correlation' ))
-  
-  x
-  
-}
+# make_plot<-function(number){
+#   
+#   OLS<-l.cor[[number]]%>%arrange(desc(Spearman_Correlation))
+#   
+#   x<-df.OLS_Sens%>%
+#     select(Name, OLS$CQ_Parameter[1], OLS$term)%>%
+#     pivot_longer(cols = c(3:last_col()), names_to = 'Type', values_to = 'Value')%>%
+#     drop_na(Value)%>%
+#     # mutate_if(is.numeric, ~replace(., . == 0, NA))%>%
+#     left_join(., OLS%>%select(term, Spearman_Correlation), by = c('Type'='term'))%>%
+#     mutate(Type = factor(Type, levels=unique(Type[order(-Spearman_Correlation,Type)]), ordered=TRUE))%>%
+#     ggplot(., aes(x = Value, y = !!sym(OLS$CQ_Parameter[1])))+
+#     geom_smooth(method = 'lm')+
+#     geom_point()+
+#     facet_wrap('Type', scales = 'free')+
+#     ggtitle(paste('Univariate plots of', OLS$CQ_Parameter[1], 'against Top Gauges 2 Correlates for', OLS$CQ_Parameter[1], 'ordered from highest to lowest Spearman Rank Correlation' ))
+#   
+#   x
+#   
+# }
 
 # use function in lapply (clear plot list first):
 
@@ -973,10 +1045,77 @@ make_plot<-function(number){
 #
 
 
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#### Correlations with top50 ####
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
+# determine the median flow rate for each sites CQ observations: to do this:
 
+df.TP_CQ.top50<-split(df.TP_CQ, f = df.TP_CQ$site_no)%>% # split the df into list of dfs for each site, 
+  lapply(., \(i) i%>%filter(X_00060_00003>median(i$X_00060_00003)))%>% # filter to the median flow rate for each site,
+  bind_rows(.) # bind back into single dataframe:
 
+# now run through the Correlations workflow for the top50 OLS model:
 
+df.Correlation.top50<-df.TP_CQ.top50%>%
+  rename(Name = site_no)%>%
+  select(Name, sample_dt,result_va, X_00060_00003)%>%mutate(log_C = log(result_va), log_Q = log(X_00060_00003), C = result_va, Q = X_00060_00003)%>%
+  filter(is.finite(log_C))%>%
+  filter(is.finite(log_Q))%>%
+  left_join(., df.G2.reduced, by = c('Name'='STAID'))
+df.OLS.top50<-df.Correlation.top50%>% # create a dataframe with OLS and sens slope intercept and slopes:
+  group_by(Name)%>%
+  do({ OLS.co <- coef(lm(log_C ~ log_Q, .))
+  summarize(., OLS.I = OLS.co[1], 
+            OLS.S = OLS.co[2])
+  }) %>%
+  ungroup
+df.Sens.top50<-df.Correlation.top50%>%
+  group_by(Name)%>%
+  do({ Sens.co<-zyp.sen(log_C~log_Q,.)
+  summarize(., Sen.I = Sens.co$coefficients[[1]],
+            Sen.S= Sens.co$coefficients[[2]])
+  }) %>%
+  ungroup
+df.OLS_Sens.top50<-left_join(df.OLS.top50, df.Sens.top50, by = 'Name') # merge OLS and Sens:
+# here is where top 50 workflow differes: need to use the recalcualted df.Yield using two OLS models 
+df.OLS_Sens.top50<-left_join(df.OLS_Sens.top50, df.Yield.2model, by = 'Name') # merge constiuent yield:
+df.OLS_Sens.top50<-left_join(df.OLS_Sens.top50, df.G2.reduced, by = c('Name'='STAID')) # merge back the watershed characteristic data to this dataframe:
+n_sites<-dim(df.OLS_Sens.top50)[1] # set up variable for number of sites:
+df.cor.top50 <- df.OLS_Sens.top50 %>% # use the corrr package to correlate() and focus() on your variable of choice.
+  correlate(method = 'spearman') %>%
+  focus(c(OLS.I, OLS.S, Sen.I, Sen.S, Yield))%>%
+  pivot_longer(cols= c(2:6), names_to = 'CQ_Parameter', values_to = 'Spearman_Correlation')%>%
+  mutate(p_val = round(2*pt(-abs(Spearman_Correlation*sqrt((n_sites-2)/(1-(Spearman_Correlation)^2))), n_sites-2),2))%>%
+  mutate(sig_0.05 = ifelse(p_val <= 0.05, 'sig', 'not'))%>%
+  drop_na(p_val) # some standard deviaitons return NA because the watershed characteristic values are zero
+l.cor.top50<-df.cor.top50 %>% # create a list of each CQ parameter (4: OLS and Sens slope and intercept)and format it for ggplotting:
+  split(., df.cor.top50$CQ_Parameter)%>%
+  lapply(., \(i) i%>% 
+           arrange(Spearman_Correlation)%>%  
+           slice_head(n = 7)%>%
+           bind_rows(i%>%arrange(desc(Spearman_Correlation))%>%slice_head(n = 7))%>%
+           mutate(sig_0.05 = factor(sig_0.05, levels = c('not', 'sig')))%>%
+           mutate(term = factor(term, levels = unique(term[order(Spearman_Correlation)])))%>%
+           filter(!between(Spearman_Correlation, -0.25,.25))) # Order by correlation strength
+# note*: need to add thisstep for top50 workflow:
+# when removing CDL_WWHT_SOY_DBL_CROP from pred to keep (it is clearly not good to include when looing at the univariate plots)
+# OLS.S and SEN.S have no correlates between -0.25 and 0.25
+# thus I need toremove those from l.cor:
+l.cor.top50<-purrr::keep(l.cor.top50, ~ nrow(.x) > 0)
+plist<-lapply(l.cor.top50, \(i) i%>%ggplot(aes(x = term, y = Spearman_Correlation, color = sig_0.05)) + # make plot list using lapply:
+                geom_bar(stat = "identity") +
+                scale_color_manual(values = c("not" = "red", "sig" = "blue"),na.value = NA, drop = FALSE)+
+                facet_wrap('CQ_Parameter')+
+                ylab(paste('Spearman Correlation')) +
+                xlab("Watershed Attribute")+
+                theme(axis.text.x=element_text(angle=40,hjust=1))+
+                theme(legend.position="bottom"))
+p1<-ggpubr::ggarrange(plotlist = plist, ncol=3, nrow=2, common.legend = TRUE, legend="bottom") # arrange plots:
+p1<-annotate_figure(p1, top = text_grob(paste(ncode, "Correlated Against Gauges 2"), color = "red", face = "bold", size = 14)) # add plot title:
+p1 # plot:
+
+#
 
 
 
@@ -1080,6 +1219,7 @@ p<-df.NLCD06%>%
 
 
 
+
 #### Grouping CQ curves (stationary, mobilization, dilutionary, complex) ####
 
 # create a list of dataframes for each sites CQ observations:
@@ -1136,7 +1276,7 @@ p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
     strip.text.x = element_blank()
   )
 
-p
+# p
 
 # looking at this plot I want to add a fourth CQ type for complex, if the slopes of the BP analysis look widely different. 
 # I will start with calcuating the angle between pre-post BP slope and see which sites get signled out:
@@ -1183,17 +1323,17 @@ p
 
 # create a plotting function for each site:
 
-p.fun<-function(df){
-  ggplot(df, aes(x = log(Q_real), y = log(C)))+
-    geom_point(aes(color = Type))+
-    scale_color_manual(name = "CQ Type", values = c("red", "blue", "green"))+
-    geom_smooth(method = 'lm')+
-    new_scale_color() +
-    geom_line(aes(x = Q, y = Seg_C), size = 2.5, color = 'black')+
-    geom_line(aes(x = Q, y = Seg_C, color = slope_angle), size = 2)+
-    scale_color_manual(name = "Slope Angle", values = hc)+
-    ggtitle(df_Seg.2$site[df_Seg.2$n_sample_rank==i])
-}
+# p.fun<-function(df){
+#   ggplot(df, aes(x = log(Q_real), y = log(C)))+
+#     geom_point(aes(color = Type))+
+#     scale_color_manual(name = "CQ Type", values = c("red", "blue", "green"))+
+#     geom_smooth(method = 'lm')+
+#     new_scale_color() +
+#     geom_line(aes(x = Q, y = Seg_C), size = 2.5, color = 'black')+
+#     geom_line(aes(x = Q, y = Seg_C, color = slope_angle), size = 2)+
+#     scale_color_manual(name = "Slope Angle", values = hc)+
+#     ggtitle(df_Seg.2$site[df_Seg.2$n_sample_rank==i])
+# }
 
 # use function in lappy to make lots of plots (clear plot list first)
 
@@ -1212,6 +1352,80 @@ p.fun<-function(df){
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### Grouping CQ curves using top 50 ####
+
+# determine the median flow rate for each sites CQ observations: to do this:
+
+df.TP_CQ.top50<-split(df.TP_CQ, f = df.TP_CQ$Name)%>% # split the df into list of dfs for each site, 
+  lapply(., \(i) i%>%filter(X_00060_00003>median(i$X_00060_00003)))%>% # filter to the median flow rate for each site,
+  bind_rows(.) # bind back into single dataframe:
+
+# now run through grouping CQ workflow with this truncated df:
+
+l.TP_CQ<-df.TP_CQ.top50%>%split(., .$Name) # resplit the df into list:
+l.TP_CQ.lm<-lapply(l.TP_CQ, \(i) lm(log_C~log_Q, data=i)) # create lm models for each site:
+TP_CQ.coef<-as.data.frame(bind_rows(lapply(l.TP_CQ.lm, \(i) summary(i)$coefficients[,1]), .id = 'site_no'))%>%rename(Intercept = 2, Slope = 3) # save the model coef ad pvals:
+TP_CQ.pvals<-as.data.frame(bind_rows(lapply(l.TP_CQ.lm, \(i) summary(i)$coefficients[,4]), .id = 'site_no'))%>%rename(Intercept.pval = 2, Slope.pval = 3) # save the pvalues 
+df.lm.top50<-left_join(TP_CQ.coef,TP_CQ.pvals,by='site_no')%>%left_join(., df.TP_CQ%>%select(Name, n_sample_rank)%>%distinct(., .keep_all = T), by = c('site_no' = 'Name')) # merge the two dfs:
+df.lm.top50<-mutate(df.lm.top50, Type_top50 = ifelse(Slope.pval>0.05, 'Stationary', ifelse(Slope>0, 'Mobilization', 'Dilution'))) # add column for CQ type:
+df.TP_CQ.top50<-left_join(df.TP_CQ.top50,df.lm.top50%>%select(site_no, Type_top50),by=c('Name'='site_no')) # merge CQ type labels to the df for plotting
+
+# here is where it changes: add another column for the y coordinates of the OLS line for just the top 50 percentile:
+
+temp<-lapply(seq_along(l.TP_CQ.lm), \(i) data.frame(Seg_C_log_top50 = fitted(l.TP_CQ.lm[[i]]), l.TP_CQ[[i]]$sample_dt))%>%
+  purrr::set_names(names(l.TP_CQ.lm))%>%
+  bind_rows(., .id = 'Name')%>%
+  rename(site = Name, Date = 3)%>%
+  mutate(Date = as.Date(Date))
+
+# now add upper 50 CQ type and Seg_C_log_top50 columns to df_Seg.2:
+
+df_Seg.2<-left_join(df_Seg.2, df.lm.top50%>%select(site_no, Type_top50), by = c('site'='site_no'))%>%
+  mutate(Date = as.Date(Date))%>%
+  left_join(., temp, by = c('site', 'Date'))
+
+# make plot:
+
+p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
+  geom_point()+
+  geom_smooth(aes(color = Type),method = 'lm')+
+  scale_color_manual(name = "Full CQ Type", values = c("red", "blue", "green"))+
+  ylab('log(TP)')+
+  new_scale_color() +
+  geom_line(aes(x = log(Q_real), y = Seg_C_log_top50), size = 2.5, color = 'black')+
+  geom_line(aes(x = log(Q_real), y = Seg_C_log_top50, color = Type_top50), size = 2)+
+  scale_color_manual(name = "Top 50 CQ Type", values = c("blue", "green"))+
+  facet_wrap(dplyr::vars(n_sample_rank), scales = 'free')+
+  theme(
+    strip.background = element_blank(),
+    strip.text.x = element_blank()
+  )
+
+p
+
+# export df_Seg.2 for use in FingerLakesPresentation.R
+
+# save(df_Seg.2, file = 'Processed_Data/TP.df_Seg.2.w_top50.Rdata')
+
+#
 
 
 
@@ -1448,53 +1662,62 @@ df.TP_CQ.top50<-split(df.TP_CQ, f = df.TP_CQ$Name)%>% # split the df into list o
   lapply(., \(i) i%>%filter(X_00060_00003>median(i$X_00060_00003)))%>% # filter to the median flow rate for each site,
   bind_rows(.) # bind back into single dataframe:
 
-# now run through grouping CQ workflow with this truncated df:
+# now run through the MLR workflow:
 
-l.TP_CQ<-df.TP_CQ.top50%>%split(., .$Name) # resplit the df into list:
-l.TP_CQ.lm<-lapply(l.TP_CQ, \(i) lm(log_C~log_Q, data=i)) # create lm models for each site:
-TP_CQ.coef<-as.data.frame(bind_rows(lapply(l.TP_CQ.lm, \(i) summary(i)$coefficients[,1]), .id = 'site_no'))%>%rename(Intercept = 2, Slope = 3) # save the model coef ad pvals:
-TP_CQ.pvals<-as.data.frame(bind_rows(lapply(l.TP_CQ.lm, \(i) summary(i)$coefficients[,4]), .id = 'site_no'))%>%rename(Intercept.pval = 2, Slope.pval = 3) # save the pvalues 
-df.lm<-left_join(TP_CQ.coef,TP_CQ.pvals,by='site_no')%>%left_join(., df.TP_CQ%>%select(Name, n_sample_rank)%>%distinct(., .keep_all = T), by = c('site_no' = 'Name')) # merge the two dfs:
-df.lm<-mutate(df.lm, Type_top50 = ifelse(Slope.pval>0.05, 'Stationary', ifelse(Slope>0, 'Mobilization', 'Dilution'))) # add column for CQ type:
-df.TP_CQ.top50<-left_join(df.TP_CQ.top50,df.lm%>%select(site_no, Type_top50),by=c('Name'='site_no')) # merge CQ type labels to the df for plotting
-
-# here is where it changes: add another column for the y coordinates of the OLS line for just the top 50 percentile:
-
-temp<-lapply(seq_along(l.TP_CQ.lm), \(i) data.frame(Seg_C_log_top50 = fitted(l.TP_CQ.lm[[i]]), l.TP_CQ[[i]]$sample_dt))%>%
-  purrr::set_names(names(l.TP_CQ.lm))%>%
-  bind_rows(., .id = 'Name')%>%
-  rename(site = Name, Date = 3)%>%
-  mutate(Date = as.Date(Date))
-
-# now add upper 50 CQ type and Seg_C_log_top50 columns to df_Seg.2:
+l.cor.MLR<-df.cor.top50 %>% # create a list of dfs, one for each cQ parameter, with the values of the spearman correlations for each predictor:
+  split(., df.cor.top50$CQ_Parameter)%>%
+  lapply(., \(i) i%>% 
+           arrange(desc(abs(Spearman_Correlation)))%>%  
+           # slice_head(n = 7)%>%
+           # bind_rows(i%>%arrange(desc(Spearman_Correlation))%>%slice_head(n = 7))%>%
+           # distinct(term, .keep_all = T)%>%
+           # filter(!between(Spearman_Correlation, -0.25,.25))%>%
+           mutate(sig_0.05 = factor(sig_0.05, levels = c('not', 'sig')))%>%
+           # mutate(term = factor(term, levels = unique(term[order(Spearman_Correlation)])))%>%
+           # filter(sig_0.05 == 'sig')%>%
+           as.data.frame())
+l.cor.MLR.full<-lapply(1:5, \(i) df.OLS_Sens.top50%>% # create a list of dfs from df.OLS.Sens, which contains the values of the predictors, subseting using the names in each l.cor[[i]]$term:
+                         select(i+1, l.cor.MLR[[i]]$term)%>%
+                         as.data.frame()%>%
+                         rename(term = 1))
+names(l.cor.MLR.full)<-names(df.OLS_Sens.top50)[2:6]
+l.cor.MLR.full.w_name<-lapply(1:5, \(i) df.OLS_Sens.top50%>% # create another list but keep the site names for use at end of loop in site outliers:
+                                select(1, i+1, l.cor.MLR[[i]]$term)%>%
+                                as.data.frame())
+names(l.cor.MLR.full.w_name)<-names(df.OLS_Sens.top50)[2:6]
+m.list<-list() # create list to store model objects
+i<-1
+for (i in 1:5){ # loop through the 5 CQ parameters:
+  df<-l.cor.MLR.full[[i]]
+  library(caret)
+  set.seed(123)
+  train.control <- trainControl(method = "cv", number = 10) # Set up repeated k-fold cross-validation
+  step.model <- train(term ~., data = df, method = "leapForward", tuneGrid = data.frame(nvmax = 1:5),trControl = train.control) # Train the model
+  step.model$results  # look at model results:
+  step.model$bestTune
+  summary(step.model$finalModel)
+  coef(step.model$finalModel, as.numeric(step.model$bestTune))
+  pred<-names(coef(step.model$finalModel, as.numeric(step.model$bestTune)))[-1] # get df of just the predictors in this model:
+  df.2<-df%>%select(term, pred)
+  m<-lm(term~., data=df.2) # make lm:
+  m.list[[i]]<-m # append model to list
+  summary(m)
+  p<-df.2%>%pivot_longer(cols = 2:last_col(), names_to = 'Predictor', values_to = 'Value')%>% # look at univarite plots:
+    rename(!!names(l.cor.MLR.full)[i]:=term)%>%
+    ggplot(., aes(x=Value, y=!!sym(names(l.cor.MLR.full)[i])))+
+    geom_point()+
+    geom_smooth(method = 'lm')+
+    facet_wrap('Predictor', scales = 'free')
+  p
+  # plot(m)  # look at model residuals:
   
-df_Seg.2<-left_join(df_Seg.2, df.lm%>%select(site_no, Type_top50), by = c('site'='site_no'))%>%
-  mutate(Date = as.Date(Date))%>%
-  left_join(., temp, by = c('site', 'Date'))
+}
 
-# make plot:
+# set m.list names:
 
-p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
-  geom_point()+
-  geom_smooth(aes(color = Type),method = 'lm')+
-  scale_color_manual(name = "Full CQ Type", values = c("red", "blue", "green"))+
-  ylab('log(TP)')+
-  new_scale_color() +
-  geom_line(aes(x = log(Q_real), y = Seg_C_log_top50), size = 2.5, color = 'black')+
-  geom_line(aes(x = log(Q_real), y = Seg_C_log_top50, color = Type_top50), size = 2)+
-  scale_color_manual(name = "Top 50 CQ Type", values = c("blue", "green"))+
-  facet_wrap(dplyr::vars(n_sample_rank), scales = 'free')+
-  theme(
-    strip.background = element_blank(),
-    strip.text.x = element_blank()
-  )
+names(m.list)<-names(l.cor.MLR.full)
 
-p
-
-# export this df_Seg.2 for use in FingerLakesPresentation.R
-
-save(df_Seg.2, file = 'Processed_Data/TP.df_Seg.2.w_top50.Rdata')
-
+tab_model(m.list, dv.labels = names(m.list), title = paste('Comparison of MLR models for',ncode, 'using forward selection implemented in caret::train'), file="temp.top50.html")
 
 #
 

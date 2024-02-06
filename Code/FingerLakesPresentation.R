@@ -585,11 +585,35 @@ p<-ggplot(temp, aes(x = EP, y = C*Q_mm_day, color = Season))+
 
 p
 
+#### 4) Plots for using upper 50% for analysis ####
 
+# first plot is CQ plots:
 
+# load in data
 
+load('Processed_Data/TP.df_Seg.2.w_top50.Rdata')
 
+# filter to 6sites on poster and make plot:
+# *note* I need tochange the scale_color_manual from the code in NWIS.R because only mobilization and staitonary are pesented in these 6 sites:
 
+p<-filter(df_Seg.2, site %in% keep)%>%
+  ggplot(., aes(x = log(Q_real), y = log(C)))+
+  geom_point()+
+  geom_smooth(aes(color = Type),method = 'lm')+
+  scale_color_manual(name = "Full CQ Type", values = c("red", "blue"))+
+  ylab('log(TP)')+
+  new_scale_color() +
+  geom_line(aes(x = log(Q_real), y = Seg_C_log_top50), size = 2.5, color = 'black')+
+  geom_line(aes(x = log(Q_real), y = Seg_C_log_top50, color = Type_top50), size = 2)+
+  scale_color_manual(name = "Top 50 CQ Type", values = c("red", "blue"))+
+  facet_wrap(dplyr::vars(n_sample_rank), scales = 'free')+
+  theme(
+    strip.background = element_blank(),
+    strip.text.x = element_blank()
+  )+
+  ggtitle('Concnetration against discharge for 6 sites in poster shwoing overall OLS(Full CQ type) and OLS of the observations > median')
+
+p
 
 
 

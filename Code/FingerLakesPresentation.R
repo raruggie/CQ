@@ -81,7 +81,7 @@ df.points<-readNWISsite(df.sf.NWIS$Name)%>%
 
 #
 
-#### CQ curves ####
+#### CQ curves (and with top50) ####
 
 # load in plotting df:
 
@@ -166,6 +166,47 @@ p<-ggplot(df_Seg.2, aes(x = Q_mm_day, y = C))+
   # geom_rect(data = df_Seg.2%>%distinct(df_Seg.2$site, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, fill = USGS.LU.Adjusted), alpha = .35)+
   # scale_fill_manual(name = "USGS Landuse\n(Adjusted)", values = c("red", "blue","yellow", "green"))+
   # guides(fill=guide_legend(nrow=2,byrow=TRUE))
+
+p
+
+# with top50:
+# need to merge the top 50 columns in the df_Seg.2 made with the top50 analysis to the df_Seg.2 made above: 
+
+temp<-df_Seg.2%>%mutate(Date = as.Date(Date))
+
+load('Processed_Data/TP.df_Seg.2.w_top50.Rdata')
+
+df_Seg.2<-left_join(temp, df_Seg.2%>%select(site, Date, ends_with('50')), by = c('site_no' = 'site', 'Date' = 'Date'))
+
+p<-ggplot(df_Seg.2, aes(x = Q_mm_day, y = C))+
+  geom_point(
+    # aes(color = Type)
+  )+
+  scale_x_log10(
+    breaks = scales::trans_breaks("log10", function(x) 10^x),
+    labels = scales::trans_format("log10", scales::math_format(10^.x))
+  )+
+  scale_y_log10(
+    breaks = scales::trans_breaks("log10", function(x) 10^x),
+    labels = scales::trans_format("log10", scales::math_format(10^.x))
+  )+
+  geom_smooth(aes(color = Type),method = 'lm')+
+  scale_color_manual(name = "CQ Type", values = c("red", "blue", "green"))+
+  ylab('TP (mg/L)')+
+  xlab('Discharge (mm/day)')+
+  new_scale_color() +
+  geom_line(aes(x = Q_mm_day, y = exp(Seg_C_log_top50)), size = 2.5, color = 'black')+
+  geom_line(aes(x = Q_mm_day, y = exp(Seg_C_log_top50), color = Type_top50), size = 2)+
+  scale_color_manual(name = "Top 50 CQ Type", values = c("red", "blue"))+
+  facet_wrap('site', scales = 'fixed', ncol = 2, dir="v")
+  # theme(
+  #   # strip.background = element_blank(),
+  #   # strip.text.x = element_blank(),
+  #   legend.position="none"
+  # ) #+
+# geom_rect(data = df_Seg.2%>%distinct(df_Seg.2$site, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, fill = USGS.LU.Adjusted), alpha = .35)+
+# scale_fill_manual(name = "USGS Landuse\n(Adjusted)", values = c("red", "blue","yellow", "green"))+
+# guides(fill=guide_legend(nrow=2,byrow=TRUE))
 
 p
 
@@ -267,7 +308,6 @@ p.4$labels$fill <- "Normalized (0-1) \nSlope Magnitude"
 p.4$labels$shape <- "CQ Type"
 
 p.4
-
 
 # look at sites that are dilutionary:
 
@@ -503,12 +543,12 @@ p<-ggplot(df_Seg.2, aes(x = Q_mm_day, y = C*Q_mm_day, color = Season))+
   # geom_line(aes(x = Q, y = Seg_C), size = 2.5, color = 'black')+
   # geom_line(aes(x = Q, y = Seg_C, color = slope_angle), size = 2)+
   # scale_color_manual(name = "Slope Angle", values = hc)+
-  facet_wrap('site', scales = 'fixed', ncol = 2, dir="v")+
-  theme(
-    strip.background = element_blank(),
-    strip.text.x = element_blank() #,
-    # legend.position="none"
-  )+
+  facet_wrap('site', scales = 'free', ncol = 2, dir="v")+
+  # theme(
+  #   strip.background = element_blank(),
+  #   strip.text.x = element_blank() #,
+  #   # legend.position="none"
+  # )+
 # geom_rect(data = df_Seg.2%>%distinct(df_Seg.2$site, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, fill = USGS.LU.Adjusted), alpha = .35)+
 # scale_fill_manual(name = "USGS Landuse\n(Adjusted)", values = c("red", "blue","yellow", "green"))+
 # guides(fill=guide_legend(nrow=2,byrow=TRUE)) +
@@ -561,69 +601,34 @@ temp$EP<-round(temp$m/(temp$n+1), 4)
 
 # make plot:
 
-p<-ggplot(temp, aes(x = EP, y = C*Q_mm_day, color = Season))+
+p<-ggplot(temp, aes(x = EP, y = log(C), color = Season))+
   geom_point()+
-  scale_x_log10(
-    breaks = scales::trans_breaks("log10", function(x) 10^x),
-    labels = scales::trans_format("log10", scales::math_format(10^.x))
-  )+
-  scale_y_log10(
-    breaks = scales::trans_breaks("log10", function(x) 10^x),
-    labels = scales::trans_format("log10", scales::math_format(10^.x))
-  )+
+  # scale_x_log10(
+  #   breaks = scales::trans_breaks("log10", function(x) 10^x),
+  #   labels = scales::trans_format("log10", scales::math_format(10^.x))
+  # )+
+  # scale_y_log10(
+  #   breaks = scales::trans_breaks("log10", function(x) 10^x),
+  #   labels = scales::trans_format("log10", scales::math_format(10^.x))
+  # )+
   scale_x_reverse()+
+  geom_smooth(aes(color = Season), method = 'lm')+
   ylab('TP Load (mg/L * mm/day)')+
   xlab('Exccedence Probability')+
   # geom_smooth(method = 'lm')+
   facet_wrap('site', scales = 'fixed', ncol = 2, dir="v")+
-  theme(
-    strip.background = element_blank(),
-    strip.text.x = element_blank() #,
-    # legend.position="none"
-  )+
-  ggtitle('Load against flow colored by season for 6 sites in poster')
+  # theme(
+  #   strip.background = element_blank(),
+  #   strip.text.x = element_blank() #,
+  #   # legend.position="none"
+  # )+
+  ggtitle('Load against Flow Exccedence Proability colored by season for 6 sites in poster')
 
 p
 
-#### 4) Plots for using upper 50% for analysis ####
+#### 4) CQ Plots for using upper 50% for analysis ####
 
-# first plot is CQ plots:
-
-# load in data
-
-load('Processed_Data/TP.df_Seg.2.w_top50.Rdata')
-
-# filter to 6sites on poster and make plot:
-# *note* I need tochange the scale_color_manual from the code in NWIS.R because only mobilization and staitonary are pesented in these 6 sites:
-
-p<-filter(df_Seg.2, site %in% keep)%>%
-  ggplot(., aes(x = log(Q_real), y = log(C)))+
-  geom_point()+
-  geom_smooth(aes(color = Type),method = 'lm')+
-  scale_color_manual(name = "Full CQ Type", values = c("red", "blue"))+
-  ylab('log(TP)')+
-  new_scale_color() +
-  geom_line(aes(x = log(Q_real), y = Seg_C_log_top50), size = 2.5, color = 'black')+
-  geom_line(aes(x = log(Q_real), y = Seg_C_log_top50, color = Type_top50), size = 2)+
-  scale_color_manual(name = "Top 50 CQ Type", values = c("red", "blue"))+
-  facet_wrap(dplyr::vars(n_sample_rank), scales = 'free')+
-  theme(
-    strip.background = element_blank(),
-    strip.text.x = element_blank()
-  )+
-  ggtitle('Concnetration against discharge for 6 sites in poster shwoing overall OLS(Full CQ type) and OLS of the observations > median')
-
-p
-
-
-
-
-
-
-
-
-
-
+# see section above called: #### CQ curves (and with top50) ####
 
 
 

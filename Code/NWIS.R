@@ -837,7 +837,7 @@ pred_to_keep<-c("HYDRO_DISTURB_INDX",
                names(l.G2$LC06_Basin),
                names(l.G2$LC_Crops),
                temp1,
-               'HGA', 'HGB', 'HGC', 'HGD',
+               # 'HGA', 'HGB', 'HGC', 'HGD',
                "ELEV_MEDIAN_M_BASIN",
                "ELEV_STD_M_BASIN",
                "RRMEDIAN"
@@ -853,7 +853,7 @@ pred_to_keep <- pred_to_keep[!(pred_to_keep %in% c("DEVOPENNLCD06","DEVLOWNLCD06
 
 # filtering df.G2 to this predictor list:
 
-df.G2.reduced<-df.G2%>%select(c('STAID', pred_to_keep))
+df.G2.reduced<-df.G2%>%select(c('STAID', pred_to_keep, starts_with('HG')))
 
 # take the average of the RIP and MAIN for each land use:
 
@@ -1111,9 +1111,38 @@ plist<-lapply(l.cor.top50, \(i) i%>%ggplot(aes(x = term, y = Spearman_Correlatio
                 xlab("Watershed Attribute")+
                 theme(axis.text.x=element_text(angle=40,hjust=1))+
                 theme(legend.position="bottom"))
-p1<-ggpubr::ggarrange(plotlist = plist, ncol=3, nrow=2, common.legend = TRUE, legend="bottom") # arrange plots:
+p1<-ggpubr::ggarrange(plotlist = plist, ncol=2, nrow=2, common.legend = TRUE, legend="bottom") # arrange plots:
 p1<-annotate_figure(p1, top = text_grob(paste(ncode, "Correlated Against Gauges 2"), color = "red", face = "bold", size = 14)) # add plot title:
 p1 # plot:
+
+# look at univarite plot for AANY:
+
+OLS<-l.cor.top50[[3]]%>%arrange(desc(Spearman_Correlation))
+
+# make univariate plots (facets) of Y (determined in [[]]) above and predictors: 
+# note the predictor column isturned into an ordered factor based on thespearman correlation values
+# to makethe facet plots in order:
+
+df.OLS_Sens.top50%>%
+  select(Name, OLS$CQ_Parameter[1], OLS$term)%>%
+  pivot_longer(cols = c(3:last_col()), names_to = 'Type', values_to = 'Value')%>%
+  drop_na(Value)%>%
+  # mutate_if(is.numeric, ~replace(., . == 0, NA))%>%
+  left_join(., OLS%>%select(term, Spearman_Correlation), by = c('Type'='term'))%>%
+  mutate(Type = factor(Type, levels=unique(Type[order(-Spearman_Correlation,Type)]), ordered=TRUE))%>%
+  ggplot(., aes(x = Value, y = !!sym(OLS$CQ_Parameter[1])))+
+  geom_smooth(method = 'lm')+
+  geom_point()+
+  # scale_x_log10(
+  #   breaks = scales::trans_breaks("log10", function(x) 10^x),
+  #   labels = scales::trans_format("log10", scales::math_format(10^.x))
+  # )+
+  # scale_y_log10(
+  #   breaks = scales::trans_breaks("log10", function(x) 10^x),
+  #   labels = scales::trans_format("log10", scales::math_format(10^.x))
+  # )+
+  facet_wrap('Type', scales = 'free')+
+  ggtitle(paste('Univariate plots of', OLS$CQ_Parameter[1], 'against Top Gauges 2 Correlates for', OLS$CQ_Parameter[1], 'ordered from highest to lowest Spearman Rank Correlation' ))
 
 #
 
@@ -1313,7 +1342,7 @@ p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
   geom_rect(data = df_Seg.2%>%distinct(df_Seg.2$site, .keep_all = T), aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf, fill = USGS.LU.Adjusted), alpha = .35)+
   scale_fill_manual(name = "USGS Landuse\n(Adjusted)", values = c("red", "blue","yellow", "green"))
 
-p
+# p
 
 # export df_Seg.2:
 
@@ -1419,7 +1448,7 @@ p<-ggplot(df_Seg.2, aes(x = log(Q_real), y = log(C)))+
     strip.text.x = element_blank()
   )
 
-p
+# p
 
 # export df_Seg.2 for use in FingerLakesPresentation.R
 
@@ -1450,7 +1479,7 @@ p
 
 
 
-#### Steve's Idea: triangle CQ plot ####
+#### Triangle plot ####
 
 # set up dataframe:
 
@@ -1480,9 +1509,31 @@ p
 
 #
 
+#### Triangle plot with top 50 ####
 
+df.tri<-left_join(df.lm.top50, df.NLCD06%>%select(Name, DEVNLCD06, PLANTNLCD06), by = c('site_no'='Name'))%>%select(site_no, Slope, Type_top50, DEVNLCD06, PLANTNLCD06)%>%mutate(Slope = round(Slope, 2), DEVNLCD06=round(DEVNLCD06, 2), PLANTNLCD06=round(PLANTNLCD06, 2))
 
+# create plot:
 
+p<-ggplot(df.tri, aes(x=DEVNLCD06, y=PLANTNLCD06)) +
+  geom_point(aes(shape=as.factor(Type_top50), fill=abs(Slope)), size = 4) +
+  scale_shape_manual(values = c("Mobilization" = 24, "Dilution" = 25, "Stationary" = 22),
+                     guide = guide_legend(override.aes = list(fill = "pink")))+
+  scale_fill_gradient(low = "yellow", high = "red")+
+  xlab('Percent Developed')+
+  ylab('Percent Agriculture')+
+  ggtitle(paste(ncode, 'CQ type and slope magnitude as a function of percent Ag and Developed Land'))
+
+p$labels$fill <- "Slope Magnitude"
+p$labels$shape <- "CQ Type"
+
+p
+
+# want to recreate this plot in Code/FingerLakesPresentation.R so exporting df.tri:
+
+# save(df.tri, file = 'Processed_Data/df.tri.Rdata')
+
+#
 
 
 

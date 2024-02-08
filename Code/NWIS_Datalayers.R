@@ -631,36 +631,36 @@ df.compare.G2toCDL%>%
 
 DEM.NWIS<-rast('Downloaded_Data/DEM.NWIS.tif')
 
-plot(DEM.NWIS)
+# plot(DEM.NWIS)
 
 # extract elevation metrics over each sample watershed: to do this:
 # build a function with multiple functions:
 
-f <- function(x, na.rm = T) {
-  c(mean=mean(x, na.rm = na.rm),
-    median=median(x, na.rm = na.rm),
-    range=max(x, na.rm = na.rm)-min(x, na.rm = na.rm),
-    sd=sd(x, na.rm = na.rm)
-  )
-}
+# f <- function(x, na.rm = T) {
+#   c(mean=mean(x, na.rm = na.rm),
+#     median=median(x, na.rm = na.rm),
+#     range=max(x, na.rm = na.rm)-min(x, na.rm = na.rm),
+#     sd=sd(x, na.rm = na.rm)
+#   )
+# }
 
 # reproject NWIS basins to DEM crs:
 
-vect.NWIS<-vect(df.sf.NWIS)
+# vect.NWIS<-vect(df.sf.NWIS)
 
-vect.NWIS.proj<-terra::project(vect.NWIS, crs(DEM.NWIS))
+# vect.NWIS.proj<-terra::project(vect.NWIS, crs(DEM.NWIS))
 
 # extract the metrics over each watershed using the function above:
 
-df.NWIS.DEM <- as.data.frame(terra::extract(DEM.NWIS, vect.NWIS.proj, f))
+# df.NWIS.DEM <- as.data.frame(terra::extract(DEM.NWIS, vect.NWIS.proj, f))
 
 # set the names of the df:
 
-names(df.NWIS.DEM)<-c('Name', 'Elev_Avg','Elev_Median', 'Elev_Range', 'Elev_SD')
+# names(df.NWIS.DEM)<-c('Name', 'Elev_Avg','Elev_Median', 'Elev_Range', 'Elev_SD')
 
 # set the names of the sites:
 
-df.NWIS.DEM$Name<-df.sf.NWIS$Name
+# df.NWIS.DEM$Name<-df.sf.NWIS$Name
 
 # finally save the df:
 
@@ -690,6 +690,208 @@ df.compare.G2toNED%>%
   scale_fill_gradient2(low = "red", high = "yellow")
 
 # done with DEM
+
+#### Soils ####
+
+# will use a forloop to download all the 
+
+# download soil data:
+
+# l.soils<-FedData::get_ssurgo(template = df.sf.NWIS$geometry[1], label = '1')
+
+# look at map:
+
+# mapview(l.soils[[1]])+mapview(df.sf.NWIS$geometry[1])
+
+# will need to clip but can do that later...
+
+# the mukey in the spatial element can be used as a joining column for the HSG, which is located in l.soils$tabular$muaggatt:
+
+# df.sf.soils<-left_join(l.soils[[1]], l.soils$tabular$muaggatt%>%select(mukey, hydgrpdcd)%>%mutate(MUKEY = as.character(mukey), .keep = 'unused'), by = 'MUKEY')
+
+# save(df.sf.soils, file = 'Processed_Data/df.sf.soils.Rdata')
+
+load('Processed_Data/df.sf.soils.Rdata')
+
+# lets filter the MU with NA and replot:
+
+df.sf.soils%>%drop_na(hydgrpdcd)%>%mapview(., zcol = 'hydgrpdcd') 
+
+# it looks like the NAs are water!!
+
+# convert to SpatVector to perform spatial analysis:
+
+vect.soils<-vect(df.sf.soils%>%drop_na(hydgrpdcd))
+
+vect.DA.template<-vect(df.sf.NWIS$geometry[1])
+
+# crop soils vector to draiange area vector:
+
+vect.soils<-terra::crop(vect.soils, vect.DA.template)
+
+# look at map:
+
+plot(x= vect.soils, y='hydgrpdcd')
+
+# add column of each polygons area:
+
+vect.soils$area_ha<-expanse(x= vect.soils, unit = 'ha')
+
+# make a dataframe of the areas and HSG, and calcualte the percent of each HSG:
+
+df.HSG<-data.frame(Area = vect.soils$area_ha, HSG = vect.soils$hydgrpdcd)%>%
+  drop_na(HSG)%>%
+  group_by(HSG)%>%
+  summarize(Watershed_Percent = sum(Area)/sum(.$Area))
+
+# done! now QA GAGES II:
+
+x<-df.G2.reduced%>%
+  select(STAID, starts_with('HG'))%>%
+  mutate(across(where(is.numeric), ~./100))%>%
+  filter(STAID == df.sf.NWIS$Name[[1]])
+
+x
+
+df.HSG
+
+# discrepcy!
+
+#### Roads ####
+
+# install.packages("tigris")
+
+# library(tigris)
+
+# download roads:
+
+# NY.roads<-roads(state = 36, county = 'Onondaga')
+
+# mapview(NY.roads)
+
+# I dont think it is worth processing the roads right now...
+
+#### NHD ####
+
+install.packages("nhdplusTools")
+
+library(nhdplusTools)
+library(sf)
+
+# read in NWIS site outlet corrdinate:
+
+df.NWIS.TP_site_metadata<-read.csv("Raw_Data/df.NWIS.TP_site_metadata.csv", colClasses = c(site_no = "character"))%>%
+  filter(site_no %in% df.sf.NWIS$Name)
+
+# run through nhdplusTools workflow:
+
+start_point <- st_sfc(st_point(c(df.NWIS.TP_site_metadata$dec_long_va[1], df.NWIS.TP_site_metadata$dec_lat_va[1])), crs = 4269)
+start_comid <- discover_nhdplus_id(start_point)
+
+flowline <- navigate_nldi(list(featureSource = "comid", 
+                               featureID = start_comid), 
+                          mode = "upstreamTributaries", 
+                          distance_km = 1000)
+
+subset_file <- tempfile(fileext = ".gpkg")
+subset <- subset_nhdplus(comids = as.integer(flowline$UT$nhdplus_comid),
+                         output_file = subset_file,
+                         nhdplus_data = "download", 
+                         flowline_only = FALSE,
+                         return_data = TRUE, overwrite = TRUE)
+
+flowline <- subset$NHDFlowline_Network
+catchment <- subset$CatchmentSP
+waterbody <- subset$NHDWaterbody
+
+## Or using a file:
+
+flowline <- sf::read_sf(subset_file, "NHDFlowline_Network")
+catchment <- sf::read_sf(subset_file, "CatchmentSP")
+waterbody <- sf::read_sf(subset_file, "NHDWaterbody")
+
+plot(sf::st_geometry(flowline), col = "blue")
+plot(start_point, cex = 1.5, lwd = 2, col = "red", add = TRUE)
+plot(sf::st_geometry(catchment), add = TRUE)
+plot(sf::st_geometry(waterbody), col = rgb(0, 0, 1, alpha = 0.5), add = TRUE)
+
+# this is so cool!!
+
+# play around with flowline df:
+
+mapview(flowline1, zcol = "ftype")
+
+# my goal with the NHD is to use it to calcualte the landuse in the buffer,
+# so I really only need the StreamRiver ftype. 
+
+flowline1<-flowline%>%filter(ftype == 'StreamRiver')
+
+# create 100 and 800 meter buffer. use st_union to remove overlap:
+
+buffer.100<-st_buffer(flowline1, 100)%>%st_union()
+
+buffer.800<-st_buffer(flowline1, 800)%>%st_union()
+
+# Look at map:
+
+mapview(buffer.100)+mapview(flowline1)
+
+# looks good
+
+# calculate the watershed 100 and 800 meter percent in major landuse types. to do this:
+
+# load in the 2016 NLCD:
+
+load('Downloaded_Data/l.NWIS.NLCD.2016.Rdata')
+
+# convert the one of interest to SpatRaster:
+
+rast.NLCD<-rast(l.rast.NWIS.NLCD.2016[[1]])
+
+# reproject to buffer vector data to match raster data:
+
+vect.buffer.100<-vect(buffer.100) 
+vect.buffer.800<-vect(buffer.800)
+
+vect.buffer.100.proj<-terra::project(vect.buffer.100, crs(rast.NLCD))
+vect.buffer.800.proj<-terra::project(vect.buffer.800, crs(rast.NLCD))
+
+# extract frequency tables:
+
+df.buffer.freq_table.100 <- terra::extract(rast.NLCD, vect.buffer.100.proj, ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2))
+
+
+
+
+# map:
+
+library(maptiles)
+bg <- get_tiles(ext(vect.flowline.buffer.100))
+
+plotRGB(bg)
+lines(vect.flowline.buffer.100, col="blue", lwd=3)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

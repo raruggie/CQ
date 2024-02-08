@@ -411,17 +411,27 @@ temp%>%
 # download: to do this:
 
 # NLCD is not working when trying to download based on the entire polygon df, so going to use lapply to download individually:
-
+# 
 # l.rast.NWIS.NLCD.2006 <- lapply(seq_along(df.sf.NWIS$Name), \(i) get_nlcd(template = st_cast(df.sf.NWIS, "MULTIPOLYGON")[i,], label = as.character(i), year = 2006))
 # l.rast.NWIS.NLCD.2016 <- lapply(seq_along(df.sf.NWIS$Name), \(i) get_nlcd(template = st_cast(df.sf.NWIS, "MULTIPOLYGON")[i,], label = as.character(i), year = 2016))
-
-# save(l.rast.NWIS.NLCD.2006, file='Downloaded_Data/l.NWIS.NLCD.2006.Rdata')
-# save(l.rast.NWIS.NLCD.2016, file='Downloaded_Data/l.NWIS.NLCD.2016.Rdata')
 
 # convert to SpatRasters:
 
 # l.rast.NWIS.NLCD.2006<-lapply(l.rast.NWIS.NLCD.2006, rast)
 # l.rast.NWIS.NLCD.2016<-lapply(l.rast.NWIS.NLCD.2016, rast)
+
+# save SpatRasters as tif files:
+
+# lapply(seq_along(l.rast.NWIS.NLCD.2006), \(i) writeRaster(l.rast.NWIS.NLCD.2006[[i]], filename = paste0('Downloaded_Data/NLCD_rasters/NLCD_2006_SpatRaster_for', df.sf.NWIS$Name[i], '.tif'), overwrite=TRUE))
+# lapply(seq_along(l.rast.NWIS.NLCD.2016), \(i) writeRaster(l.rast.NWIS.NLCD.2016[[i]], filename = paste0('Downloaded_Data/NLCD_rasters/NLCD_2016_SpatRaster_for', df.sf.NWIS$Name[i], '.tif'), overwrite=TRUE))
+
+# load SpatRasters back in:
+
+names.2006<-paste0('Downloaded_Data/NLCD_rasters/NLCD_2006_SpatRaster_for', df.sf.NWIS$Name, '.tif')
+names.2016<-paste0('Downloaded_Data/NLCD_rasters/NLCD_2016_SpatRaster_for', df.sf.NWIS$Name, '.tif')
+
+# l.rast.NWIS.NLCD.2006<-lapply(names.2006, rast)
+# l.rast.NWIS.NLCD.2016<-lapply(names.2016, rast)
 
 # see if 2006 and 2016 crs are the same:
 
@@ -773,7 +783,7 @@ df.HSG
 
 #### NHD ####
 
-install.packages("nhdplusTools")
+# install.packages("nhdplusTools")
 
 library(nhdplusTools)
 library(sf)
@@ -819,7 +829,7 @@ plot(sf::st_geometry(waterbody), col = rgb(0, 0, 1, alpha = 0.5), add = TRUE)
 
 # play around with flowline df:
 
-mapview(flowline1, zcol = "ftype")
+mapview(flowline, zcol = "ftype")
 
 # my goal with the NHD is to use it to calcualte the landuse in the buffer,
 # so I really only need the StreamRiver ftype. 
@@ -834,19 +844,15 @@ buffer.800<-st_buffer(flowline1, 800)%>%st_union()
 
 # Look at map:
 
-mapview(buffer.100)+mapview(flowline1)
+# mapview(buffer.100)+mapview(flowline1)
 
 # looks good
 
 # calculate the watershed 100 and 800 meter percent in major landuse types. to do this:
 
-# load in the 2016 NLCD:
+# Load in the NLCD for the watershed:
 
-load('Downloaded_Data/l.NWIS.NLCD.2016.Rdata')
-
-# convert the one of interest to SpatRaster:
-
-rast.NLCD<-rast(l.rast.NWIS.NLCD.2016[[1]])
+rast.NLCD<-rast(names.2006[1])
 
 # reproject to buffer vector data to match raster data:
 
@@ -858,7 +864,65 @@ vect.buffer.800.proj<-terra::project(vect.buffer.800, crs(rast.NLCD))
 
 # extract frequency tables:
 
-df.buffer.freq_table.100 <- terra::extract(rast.NLCD, vect.buffer.100.proj, ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2))
+df.buffer.freq.100 <- terra::extract(rast.NLCD, vect.buffer.100.proj, ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2))
+df.buffer.freq.800 <- terra::extract(rast.NLCD, vect.buffer.800.proj, ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2))
+
+# makesure each NLCD class is represented. todo this: left join with legend:
+
+df.buffer.freq.100<-left_join(legend%>%select(Class), df.buffer.freq.100, by = 'Class')%>%replace(is.na(.), 0)
+df.buffer.freq.800<-left_join(legend%>%select(Class), df.buffer.freq.800, by = 'Class')%>%replace(is.na(.), 0)
+
+# reclassify: the GAGES II predictors for NLCD land use are the sum of a few NLCD classes (see the kable table of the variable descriptions made above). To do this:
+
+# create and ordered vector based on legend (legend comes from Ryan_funcitons.R)
+
+Class3.for.G2<-c("WATERNLCD06", "SNOWICENLCD06", rep("DEVNLCD06", 4), "BARRENNLCD06", "DECIDNLCD06", "EVERGRNLCD06", "MIXEDFORNLCD06", NA, "SHRUBNLCD06", "GRASSNLCD06", NA, NA, NA, "PASTURENLCD06", "CROPSNLCD06", "WOODYWETNLCD06", "EMERGWETNLCD06")
+
+# add an identifier to this vector so the column names are slightly different than the GAGES II predictors:
+
+Class3.for.G2<-paste0('R_', Class3.for.G2)
+
+# create a df from this vector (for latter use):
+
+df.Class3<-data.frame(Class = unique(Class3.for.G2)[complete.cases(unique(Class3.for.G2))])
+
+# create new df from the legend dataframe:
+
+legend.for.G2<-legend%>%mutate(Class3 = Class3.for.G2)
+
+# reclassify the NLCD using this new legend and clean up the dataframe from the next step
+
+x<-left_join(df.buffer.freq.800, legend.for.G2%>%select(Class, Class3), by = 'Class')%>%
+  mutate(Class = Class3)%>%
+  select(-Class3)%>%
+  group_by(Class)%>%
+  summarise(Freq = sum(Freq))%>%
+  pivot_wider(names_from = Class, values_from = Freq)%>%
+  mutate(Name = df.sf.NWIS$Name[1], .before = 1)%>%
+  mutate(R_FORESTNLCD06 = R_DECIDNLCD06+R_EVERGRNLCD06+R_MIXEDFORNLCD06,
+         R_PLANTNLCD06 = R_PASTURENLCD06+R_CROPSNLCD06)
+
+
+
+
+
+
+
+
+l.NWIS.NLCD.2016<-lapply(l.NWIS.NLCD.2016, \(i) left_join(as.data.frame(i), legend.for.G2%>%select(Class, Class3), by = 'Class')%>%mutate(Class = Class3)%>%select(-Class3)%>%group_by(Class)%>%summarise(Freq = sum(Freq)))
+
+# add back missing varaibles using df.Class3:
+
+l.NWIS.NLCD.2006<-lapply(l.NWIS.NLCD.2006, \(i) left_join(df.Class3, i, by = 'Class')%>%replace(is.na(.), 0))
+l.NWIS.NLCD.2016<-lapply(l.NWIS.NLCD.2016, \(i) left_join(df.Class3, i, by = 'Class')%>%replace(is.na(.), 0))
+
+
+
+
+
+
+
+
 
 
 

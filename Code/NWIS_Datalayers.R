@@ -816,9 +816,9 @@ waterbody <- subset$NHDWaterbody
 
 ## Or using a file:
 
-flowline <- sf::read_sf(subset_file, "NHDFlowline_Network")
-catchment <- sf::read_sf(subset_file, "CatchmentSP")
-waterbody <- sf::read_sf(subset_file, "NHDWaterbody")
+# flowline <- sf::read_sf(subset_file, "NHDFlowline_Network")
+# catchment <- sf::read_sf(subset_file, "CatchmentSP")
+# waterbody <- sf::read_sf(subset_file, "NHDWaterbody")
 
 plot(sf::st_geometry(flowline), col = "blue")
 plot(start_point, cex = 1.5, lwd = 2, col = "red", add = TRUE)
@@ -844,7 +844,7 @@ buffer.800<-st_buffer(flowline1, 800)%>%st_union()
 
 # Look at map:
 
-# mapview(buffer.100)+mapview(flowline1)
+mapview(buffer.100)+mapview(flowline1)
 
 # looks good
 
@@ -890,9 +890,9 @@ df.Class3<-data.frame(Class = unique(Class3.for.G2)[complete.cases(unique(Class3
 
 legend.for.G2<-legend%>%mutate(Class3 = Class3.for.G2)
 
-# reclassify the NLCD using this new legend and clean up the dataframe from the next step
+# reclassify the NLCD using this new legend and clean up the dataframe:
 
-x<-left_join(df.buffer.freq.800, legend.for.G2%>%select(Class, Class3), by = 'Class')%>%
+df.buffer.freq.100<-left_join(df.buffer.freq.100, legend.for.G2%>%select(Class, Class3), by = 'Class')%>%
   mutate(Class = Class3)%>%
   select(-Class3)%>%
   group_by(Class)%>%
@@ -900,7 +900,19 @@ x<-left_join(df.buffer.freq.800, legend.for.G2%>%select(Class, Class3), by = 'Cl
   pivot_wider(names_from = Class, values_from = Freq)%>%
   mutate(Name = df.sf.NWIS$Name[1], .before = 1)%>%
   mutate(R_FORESTNLCD06 = R_DECIDNLCD06+R_EVERGRNLCD06+R_MIXEDFORNLCD06,
-         R_PLANTNLCD06 = R_PASTURENLCD06+R_CROPSNLCD06)
+         R_PLANTNLCD06 = R_PASTURENLCD06+R_CROPSNLCD06)%>%
+  pivot_longer(cols = -Name)
+
+df.buffer.freq.800<-left_join(df.buffer.freq.800, legend.for.G2%>%select(Class, Class3), by = 'Class')%>%
+  mutate(Class = Class3)%>%
+  select(-Class3)%>%
+  group_by(Class)%>%
+  summarise(Freq = sum(Freq))%>%
+  pivot_wider(names_from = Class, values_from = Freq)%>%
+  mutate(Name = df.sf.NWIS$Name[1], .before = 1)%>%
+  mutate(R_FORESTNLCD06 = R_DECIDNLCD06+R_EVERGRNLCD06+R_MIXEDFORNLCD06,
+         R_PLANTNLCD06 = R_PASTURENLCD06+R_CROPSNLCD06)%>%
+  pivot_longer(cols = -Name)
 
 
 

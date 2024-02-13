@@ -61,11 +61,11 @@ source("Code/Ryan_functions.R")
 
 ####################### Workflow #######################
 
-# read in df.sf.NWIS:
+# read in watershed shapsfiles (df.sf.NWIS):
 
 load('Processed_Data/NWIS_Watershed_Shapefiles.Rdata')
 
-####~~~ CDL: Early and Recent downloads and comparisons ~~~####
+#### CDL Comparisons: Early and Recent downloads and comparisons ~~~####
 
 # note when I ran ths CDL code block I used the 103 sites thatwere apartofthe set, this is prior to filtering based onthe CDLdate... so I am just going to filter the resulting CDL df at the end. Just note that what is saved is of the 103 sites, but that the code doesnt reflect this, i.e. I just ran the filter anddidnt keep the code because df.NWIS.TP.keep would be down to 56 if I did it right 
 
@@ -104,6 +104,8 @@ load('Processed_Data/NWIS_Watershed_Shapefiles.Rdata')
 
 # save(l.NWIS.CDL, file='Processed_Data/l.NWIS.CDL.Rdata')
 # save(l.NWIS.CDL.2008, file='Processed_Data/l.NWIS.CDL.2008.Rdata')
+
+# read in CDL for 2022 and 2008 (recent and old):
 
 load('Processed_Data/l.NWIS.CDL.Rdata')
 load('Processed_Data/l.NWIS.CDL.2008.Rdata')
@@ -175,6 +177,7 @@ df.NWIS.CDL.2008.reclass<-filter(df.NWIS.CDL.2008.reclass, Crop != '')
 # for the CDL linkdata:
 
 df.NWIS.CDL<- pivot_wider(df.NWIS.CDL[,-2], names_from = Crop, values_from = Freq)
+
 df.NWIS.CDL.2008<- pivot_wider(df.NWIS.CDL.2008[,-2], names_from = Crop, values_from = Freq)
 
 # for the reclass_CDL data:
@@ -261,7 +264,7 @@ df_gg%>%filter(Name != '01349840')%>%
     scale_fill_gradient2(low = "red", high = "yellow")+
     ggtitle('Heat Map of the CDL Class Changes For 42 NWIS sites between 2008 and 2022\nNegative values represent a loss from 2008 to 2022')
 
-# that didnt really work, so now ry removing Deciduous_Forest and Mixed_Forest:
+# that didnt really work, so now try removing Deciduous_Forest and Mixed_Forest:
 
 df_gg%>%filter(!Type %in% c('Deciduous_Forest','Mixed_Forest'))%>%
   ggplot(., aes(x = Name, y = Type, fill = Value)) +
@@ -300,12 +303,7 @@ df_gg%>%filter(!Type %in% c('Deciduous_Forest','Mixed_Forest'))%>%
 
 
 
-
-
-
-####~~~~ Recreating the GAGES II predictor set ~~~~####
-
-#### Reading in GAGES II predictor set used in analysis and makeing table ####
+#### Make Table of Predictors used in Manuscript ####
 
 # these are the GAES II predictors:
 
@@ -331,27 +329,6 @@ var_desc<-filter(var_desc, VARIABLE_NAME %in% v)%>%
   mutate(Count = row_number())%>%
   select(Count, VARIABLE_NAME, DESCRIPTION)
 
-# note that the reason there are 43 in this df and 47 in vector 'v' is because the last
-# 4 in 'v' are the ones I made up
-
-# make descirptions for these:
-
-x<-c('Mainstem and Ripairan percent developed (Ryan created it from MAIN_DEV_ and RIP_DEV_ 100 and 800 GAGES II variables',
-  'Mainstem and Ripairan percent forest (Ryan created it from MAIN_FOR_ and RIP_FOR_ 100 and 800 GAGES II variables',
-  'Mainstem and Ripairan percent agriculture (Ryan created it from MAIN_PLANT_ and RIP_PLANT_ 100 and 800 GAGES II variables',
-  'Watershed percent crops not affiliated with dairy agriculture (Ryan created from potatoes, cabbange, grapes, etc.)')
-
-# create a dataframe to bind_rows with var_desc:
-
-x<-data.frame(Count = c(44:47), 
-              VARIABLE_NAME = dput(v[!v %in% var_desc$VARIABLE_NAME]),
-              DESCRIPTION = x
-)
-
-# add these back in:
-
-var_desc<-bind_rows(var_desc, x)
-
 # make kable table:
 
 var_desc %>%
@@ -359,19 +336,42 @@ var_desc %>%
   kable_classic(html_font = 'Times', font_size = 14, full_width = F)%>%
   row_spec(seq(1,nrow(var_desc),2), background="#FF000020")
 
-####~~~ GAGES II Land Use - NLCD and CDL from reclass CDL and regular CDL, resp. ~~~####
+#
 
-# recreating the GAGES II land use predictors: 
-# using the 2008 CDL data:
-# The CDL reclass can be used for the NLCD ones and
-# the non-reclass can be used for the CDL ones:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### Test of howclose I can get CDL to NLCD ####
 
 # **NOTE*
 # the CDL and NLCD differ in that the CDL combined Pasture and grassland while the nLCD does not
 # thus, even though the CDL can be agrgated to get close to the NLCD, I would need to do NLCD to get exactly like GAGES
 # here is a test of howclose I can get CDL to NLCD
-
-####~~ Test of howclose I can get CDL to NLCD ~~####
 
 # the CDL reclass are in this df:
 
@@ -380,7 +380,8 @@ df.NWIS.CDL.2008.reclass
 # compare them to the GAGES II NLCD ones (again, where we can, see above note):to do this:
 
 temp<-df.G2.reduced%>%select(STAID, names(df.G2.reduced)[c(8:11,18,19,21,22)])%>% # create a df of just the NLCD GAGES II predictors,
-  mutate_all(~ ifelse(is.numeric(.), round(.*0.01, 2), .))%>% # convert to percent between 0-1 and round to match CDL reclass
+  mutate(across(where(is.numeric), ~./100))%>% # convert to percent between 0-1 to match CDL reclass
+  mutate(across(where(is.numeric), round, 3))%>% #round 
   mutate(G2_Wetlands_eq = WOODYWETNLCD06+EMERGWETNLCD06,# create combinaitons for pasture and wetlands
          .keep = 'unused')%>%
   left_join(., df.NWIS.CDL.reclass%>%select(Name, Developed, Forest, Ag, Water,Pasture, Wetlands_all, Other), by = c('STAID'='Name')) %>% # merge with CDL reclass to compare (and rearrange the columns of the right joined df):
@@ -400,12 +401,37 @@ temp%>%
 
 # Even though I tried to tweak the reclassification matrix I am going to do NLCD too:
 
-####~ NLCD: CDL intermission ~####
 
-#### NLCD ####
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+####~~~~ Recreating the GAGES II predictor set ~~~~####
+
+
+
+
+
+#### Land Use: NLCD ####
 
 # the CDL and NLCD differ in that the CDL combined Pasture and grassland while the nLCD does not
-# thus, even though the CDL can be agrgated to et close to the NLCD, I want to also have the nLCD
+# thus, even though the CDL can be aggregated to et close to the NLCD, I want to also have the nLCD
 # to the difference.
 
 # download: to do this:
@@ -425,10 +451,12 @@ temp%>%
 # lapply(seq_along(l.rast.NWIS.NLCD.2006), \(i) writeRaster(l.rast.NWIS.NLCD.2006[[i]], filename = paste0('Downloaded_Data/NLCD_rasters/NLCD_2006_SpatRaster_for', df.sf.NWIS$Name[i], '.tif'), overwrite=TRUE))
 # lapply(seq_along(l.rast.NWIS.NLCD.2016), \(i) writeRaster(l.rast.NWIS.NLCD.2016[[i]], filename = paste0('Downloaded_Data/NLCD_rasters/NLCD_2016_SpatRaster_for', df.sf.NWIS$Name[i], '.tif'), overwrite=TRUE))
 
-# load SpatRasters back in:
+# create vectors of raster names 
 
 names.2006<-paste0('Downloaded_Data/NLCD_rasters/NLCD_2006_SpatRaster_for', df.sf.NWIS$Name, '.tif')
 names.2016<-paste0('Downloaded_Data/NLCD_rasters/NLCD_2016_SpatRaster_for', df.sf.NWIS$Name, '.tif')
+
+# load SpatRasters back in:
 
 # l.rast.NWIS.NLCD.2006<-lapply(names.2006, rast)
 # l.rast.NWIS.NLCD.2016<-lapply(names.2016, rast)
@@ -515,7 +543,9 @@ df.NWIS.NLCD.2016<-bind_rows(l.NWIS.NLCD.2016)
 # now compare to GAGES II:
 
 df.compare.G2to2006<-df.G2.reduced%>%select(STAID, names(df.G2.reduced)[c(8:11,18,19,21,22)])%>% # create a df of just the NLCD GAGES II predictors,
-  mutate_all(~ ifelse(is.numeric(.), round(.*0.01, 2), .))%>%
+  mutate(across(where(is.numeric), ~./100))%>%
+  mutate(across(where(is.numeric), round, 3))%>%
+  # mutate_all(~ ifelse(is.numeric(.), round(.*0.01, 2), .))%>%
   left_join(., df.NWIS.NLCD.2006, by = c('STAID'='Name'))%>%
   pivot_longer(cols = -STAID)%>%
   mutate(name = sub('*R_', '', name))%>%
@@ -526,7 +556,9 @@ df.compare.G2to2006<-df.G2.reduced%>%select(STAID, names(df.G2.reduced)[c(8:11,1
   mutate(across(where(is.numeric), round, 3))
 
 df.compare.G2to2016<-df.G2.reduced%>%select(STAID, names(df.G2.reduced)[c(8:11,18,19,21,22)])%>% # create a df of just the NLCD GAGES II predictors,
-  mutate_all(~ ifelse(is.numeric(.), round(.*0.01, 2), .))%>%
+  mutate(across(where(is.numeric), ~./100))%>%
+  mutate(across(where(is.numeric), round, 3))%>%
+  # mutate_all(~ ifelse(is.numeric(.), round(.*0.01, 2), .))%>%
   left_join(., df.NWIS.NLCD.2016, by = c('STAID'='Name'))%>%
   pivot_longer(cols = -STAID)%>%
   mutate(name = sub('*R_', '', name))%>%
@@ -550,12 +582,12 @@ df.compare.G2to2016%>%
   geom_tile()+
   scale_fill_gradient2(low = "red", high = "yellow")
 
-####~ Back to CDL ~####
+#### Land Use: CDL ####
 
 # the CDL ones in GAGES II do not match the CDL names :/
 # to match them up:
 
-# get just the names of the crop from the GAGESII CDL ones:
+# get the names of the crop from the GAGESII CDL ones:
 
 v<-names(df.G2.reduced)
 cdl_names <- grep("^CDL", v)
@@ -571,9 +603,9 @@ names(df.NWIS.CDL.2008) # CDL datalayers
 # Soybeans, Corn, Alfalfa, Spring_Wheat, Other_Hay/Non_Alfalfa, Grassland/Pasture, Dbl_Crop_WinWht/Soybeans, Winter_Wheat
 # *note*: ALL_OTHER_LAND is non-crop land, so excluding
 
-# now extract just these from the CDL datalayers df:
-
 keep<-c('Name', 'Corn', 'Soybeans', 'Spring_Wheat', 'Winter_Wheat', 'Dbl_Crop_WinWht/Soybeans', 'Alfalfa', 'Other_Hay/Non_Alfalfa', 'Grassland/Pasture')
+
+# now extract just these from the CDL datalayers df:
 
 temp<-df.NWIS.CDL.2008%>%select(keep)
 
@@ -584,9 +616,7 @@ names(temp)<-paste0('R_', c('Name', v[-9]))
 # now add these columns to the GAGES II df to compare:
 # also set NA to zero and round to 2 decimial places:
 
-df.compare.G2toCDL<-left_join(df.G2.reduced%>%
-                                select(STAID, v[-9])%>%
-                                mutate_all(~ ifelse(is.numeric(.), round(.*0.01, 2), .)), temp, by = c('STAID'='R_Name'))%>%
+df.compare.G2toCDL<-left_join(df.G2.reduced%>%select(STAID, v[-9])%>%mutate(across(where(is.numeric), ~./100)), temp, by = c('STAID'='R_Name'))%>%
   replace(is.na(.), 0)%>%
   mutate(across(where(is.numeric), round, 2))
 
@@ -629,7 +659,7 @@ df.compare.G2toCDL%>%
 
 
 
-#### NED ####
+#### Elevation: NED ####
 
 # download:
 
@@ -701,71 +731,119 @@ df.compare.G2toNED%>%
 
 # done with DEM
 
-#### Soils ####
 
-# will use a forloop to download all the 
 
-# download soil data:
 
-# l.soils<-FedData::get_ssurgo(template = df.sf.NWIS$geometry[1], label = '1')
 
-# look at map:
 
-# mapview(l.soils[[1]])+mapview(df.sf.NWIS$geometry[1])
 
-# will need to clip but can do that later...
 
-# the mukey in the spatial element can be used as a joining column for the HSG, which is located in l.soils$tabular$muaggatt:
 
-# df.sf.soils<-left_join(l.soils[[1]], l.soils$tabular$muaggatt%>%select(mukey, hydgrpdcd)%>%mutate(MUKEY = as.character(mukey), .keep = 'unused'), by = 'MUKEY')
 
-# save(df.sf.soils, file = 'Processed_Data/df.sf.soils.Rdata')
 
-load('Processed_Data/df.sf.soils.Rdata')
 
-# lets filter the MU with NA and replot:
 
-df.sf.soils%>%drop_na(hydgrpdcd)%>%mapview(., zcol = 'hydgrpdcd') 
 
-# it looks like the NAs are water!!
 
-# convert to SpatVector to perform spatial analysis:
 
-vect.soils<-vect(df.sf.soils%>%drop_na(hydgrpdcd))
 
-vect.DA.template<-vect(df.sf.NWIS$geometry[1])
 
-# crop soils vector to draiange area vector:
 
-vect.soils<-terra::crop(vect.soils, vect.DA.template)
 
-# look at map:
 
-plot(x= vect.soils, y='hydgrpdcd')
 
-# add column of each polygons area:
 
-vect.soils$area_ha<-expanse(x= vect.soils, unit = 'ha')
 
-# make a dataframe of the areas and HSG, and calcualte the percent of each HSG:
 
-df.HSG<-data.frame(Area = vect.soils$area_ha, HSG = vect.soils$hydgrpdcd)%>%
-  drop_na(HSG)%>%
-  group_by(HSG)%>%
-  summarize(Watershed_Percent = sum(Area)/sum(.$Area))
 
-# done! now QA GAGES II:
+
+
+
+#### Soils: SURRGO ####
+
+# example workflow:
+
+# created function to download and get watershed percent of HSG:
+# the funciton takes a single site from a sf.df, so use it in lapply for all sites:
+# want to test two random sites to GAGES 2 and streamstats HSG values:
+
+# get two random sites from df.sf.NWIS:
+
+keep<-sample(df.sf.NWIS$Name, 2)
+
+# check map (to make sure the sites arent too big since I need to download soils data for them):
+
+x<-df.sf.NWIS%>%filter(Name %in% keep)
+mapview(x, zcol = 'Name')
+
+# looks like two good random sites
+
+# get SURRGO for these sites:
+
+l.test.soils<-lapply(keep, \(i) fun.SURRGO_HSG(i, df.sf.NWIS))
+
+names(l.test.soils)<-keep
+
+# look at how much of the watershed is represented:
+
+lapply(l.test.soils, \(i) sum(i$Watershed_Percent))
+
+df.test.soils<-bind_rows(l.test.soils, .id = 'STAID')%>%filter(HSG %in% c('A', 'B', 'C', 'D'))%>%rename(Datalayers = 3)
+
+# QA with GAGES II:
 
 x<-df.G2.reduced%>%
-  select(STAID, starts_with('HG'))%>%
+  select(STAID, c('HGA', 'HGB', 'HGC', 'HGD'))%>%
   mutate(across(where(is.numeric), ~./100))%>%
-  filter(STAID == df.sf.NWIS$Name[[1]])
+  rename('A' = 2, 'B'=3, 'C'=4, 'D'=5)%>%
+  filter(STAID %in% keep)%>%
+  pivot_longer(cols=-STAID, names_to = 'HSG', values_to = 'G2')%>%
+  left_join(., df.test.soils, by = c('STAID', 'HSG'))%>%
+  mutate(Diff = Datalayers-G2)
 
-x
+# QA that dfwith streamstats (in df.sf.NWIS):
 
-df.HSG
+y<-df.sf.NWIS%>%filter(Name %in% keep)%>%select(Name, starts_with('SSURGO'))
 
-# discrepcy!
+# discrepancy!
+
+# full workflow:
+
+# get SURRGO for these sites:
+
+l.soils<-lapply(df.sf.NWIS$Name, \(i) fun.SURRGO_HSG(i, df.sf.NWIS))
+
+names(l.test.soils)<-keep
+
+# look at how much of the watershed is represented:
+
+lapply(l.test.soils, \(i) sum(i$Watershed_Percent))
+
+df.test.soils<-bind_rows(l.test.soils, .id = 'STAID')%>%filter(HSG %in% c('A', 'B', 'C', 'D'))%>%rename(Datalayers = 3)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #### Roads ####
 
@@ -781,6 +859,32 @@ df.HSG
 
 # I dont think it is worth processing the roads right now...
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #### NHD ####
 
 # install.packages("nhdplusTools")
@@ -790,150 +894,59 @@ library(sf)
 
 # read in NWIS site outlet corrdinate:
 
-df.NWIS.TP_site_metadata<-read.csv("Raw_Data/df.NWIS.TP_site_metadata.csv", colClasses = c(site_no = "character"))%>%
-  filter(site_no %in% df.sf.NWIS$Name)
+# df.NWIS.TP_site_metadata<-read.csv("Raw_Data/df.NWIS.TP_site_metadata.csv", colClasses = c(site_no = "character"))%>%
+#   filter(site_no %in% df.sf.NWIS$Name)
 
-# run through nhdplusTools workflow:
+# order df to match that of names.2006 (from df.sf.NWIS) for use in function below:
 
-start_point <- st_sfc(st_point(c(df.NWIS.TP_site_metadata$dec_long_va[1], df.NWIS.TP_site_metadata$dec_lat_va[1])), crs = 4269)
-start_comid <- discover_nhdplus_id(start_point)
+# df.site_metadata<-df.NWIS.TP_site_metadata[match(df.sf.NWIS$Name, df.NWIS.TP_site_metadata$site_no),]
 
-flowline <- navigate_nldi(list(featureSource = "comid", 
-                               featureID = start_comid), 
-                          mode = "upstreamTributaries", 
-                          distance_km = 1000)
+# use function to get 100 and 800 meter rip buffer percent dev, plant, and forest:
 
-subset_file <- tempfile(fileext = ".gpkg")
-subset <- subset_nhdplus(comids = as.integer(flowline$UT$nhdplus_comid),
-                         output_file = subset_file,
-                         nhdplus_data = "download", 
-                         flowline_only = FALSE,
-                         return_data = TRUE, overwrite = TRUE)
+# l.RIP<-lapply(seq_along(df.sf.NWIS$Name), \(i) fun.NHD.RIP.buffers(i, df.site_metadata))
 
-flowline <- subset$NHDFlowline_Network
-catchment <- subset$CatchmentSP
-waterbody <- subset$NHDWaterbody
+# combine list into single df:
 
-## Or using a file:
+# df.RIP<-bind_rows(l.RIP)%>%mutate(Name = df.sf.NWIS$Name)
 
-# flowline <- sf::read_sf(subset_file, "NHDFlowline_Network")
-# catchment <- sf::read_sf(subset_file, "CatchmentSP")
-# waterbody <- sf::read_sf(subset_file, "NHDWaterbody")
+# save df:
 
-plot(sf::st_geometry(flowline), col = "blue")
-plot(start_point, cex = 1.5, lwd = 2, col = "red", add = TRUE)
-plot(sf::st_geometry(catchment), add = TRUE)
-plot(sf::st_geometry(waterbody), col = rgb(0, 0, 1, alpha = 0.5), add = TRUE)
+# save(df.RIP, file='Processed_Data/df.NHD.RIP.buffer.100.800.pland.Rdata')
 
-# this is so cool!!
+load('Processed_Data/df.NHD.RIP.buffer.100.800.pland.Rdata')
 
-# play around with flowline df:
+# QA with gauges 2: these should line up with the RIP variables:
+  
+df.compare.G2toNHD<-df.G2.reduced%>%
+  select(STAID, contains('RIP'))%>%
+  mutate(across(where(is.numeric), ~./100))%>%
+  mutate(across(where(is.numeric), round, 3))%>%
+  left_join(., df.RIP, by = c('STAID'='Name'))%>%
+  pivot_longer(cols = -STAID)%>%
+  mutate(name = sub('*R_', '', name))%>%
+  group_by(STAID, name) %>%
+  summarise(diff = diff(value)) %>%
+  pivot_wider(names_from = name, values_from = diff) %>%
+  rename_at(-1, ~paste0(., "_diff"))
 
-mapview(flowline, zcol = "ftype")
+df.compare.G2toNHD%>%
+  pivot_longer(cols = -STAID)%>%
+  ggplot(., aes(x = STAID, y = name, fill = value)) +
+  geom_tile()+
+  scale_fill_gradient2(low = "red", high = "yellow")
+  
+# wow, they check out pretty good!
 
-# my goal with the NHD is to use it to calcualte the landuse in the buffer,
-# so I really only need the StreamRiver ftype. 
+#
 
-flowline1<-flowline%>%filter(ftype == 'StreamRiver')
-
-# create 100 and 800 meter buffer. use st_union to remove overlap:
-
-buffer.100<-st_buffer(flowline1, 100)%>%st_union()
-
-buffer.800<-st_buffer(flowline1, 800)%>%st_union()
-
-# Look at map:
-
-mapview(buffer.100)+mapview(flowline1)
-
-# looks good
-
-# calculate the watershed 100 and 800 meter percent in major landuse types. to do this:
-
-# Load in the NLCD for the watershed:
-
-rast.NLCD<-rast(names.2006[1])
-
-# reproject to buffer vector data to match raster data:
-
-vect.buffer.100<-vect(buffer.100) 
-vect.buffer.800<-vect(buffer.800)
-
-vect.buffer.100.proj<-terra::project(vect.buffer.100, crs(rast.NLCD))
-vect.buffer.800.proj<-terra::project(vect.buffer.800, crs(rast.NLCD))
-
-# extract frequency tables:
-
-df.buffer.freq.100 <- terra::extract(rast.NLCD, vect.buffer.100.proj, ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2))
-df.buffer.freq.800 <- terra::extract(rast.NLCD, vect.buffer.800.proj, ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2))
-
-# makesure each NLCD class is represented. todo this: left join with legend:
-
-df.buffer.freq.100<-left_join(legend%>%select(Class), df.buffer.freq.100, by = 'Class')%>%replace(is.na(.), 0)
-df.buffer.freq.800<-left_join(legend%>%select(Class), df.buffer.freq.800, by = 'Class')%>%replace(is.na(.), 0)
-
-# reclassify: the GAGES II predictors for NLCD land use are the sum of a few NLCD classes (see the kable table of the variable descriptions made above). To do this:
-
-# create and ordered vector based on legend (legend comes from Ryan_funcitons.R)
-
-Class3.for.G2<-c("WATERNLCD06", "SNOWICENLCD06", rep("DEVNLCD06", 4), "BARRENNLCD06", "DECIDNLCD06", "EVERGRNLCD06", "MIXEDFORNLCD06", NA, "SHRUBNLCD06", "GRASSNLCD06", NA, NA, NA, "PASTURENLCD06", "CROPSNLCD06", "WOODYWETNLCD06", "EMERGWETNLCD06")
-
-# add an identifier to this vector so the column names are slightly different than the GAGES II predictors:
-
-Class3.for.G2<-paste0('R_', Class3.for.G2)
-
-# create a df from this vector (for latter use):
-
-df.Class3<-data.frame(Class = unique(Class3.for.G2)[complete.cases(unique(Class3.for.G2))])
-
-# create new df from the legend dataframe:
-
-legend.for.G2<-legend%>%mutate(Class3 = Class3.for.G2)
-
-# reclassify the NLCD using this new legend and clean up the dataframe:
-
-df.buffer.freq.100<-left_join(df.buffer.freq.100, legend.for.G2%>%select(Class, Class3), by = 'Class')%>%
-  mutate(Class = Class3)%>%
-  select(-Class3)%>%
-  group_by(Class)%>%
-  summarise(Freq = sum(Freq))%>%
-  pivot_wider(names_from = Class, values_from = Freq)%>%
-  mutate(Name = df.sf.NWIS$Name[1], .before = 1)%>%
-  mutate(R_FORESTNLCD06 = R_DECIDNLCD06+R_EVERGRNLCD06+R_MIXEDFORNLCD06,
-         R_PLANTNLCD06 = R_PASTURENLCD06+R_CROPSNLCD06)%>%
-  pivot_longer(cols = -Name)
-
-df.buffer.freq.800<-left_join(df.buffer.freq.800, legend.for.G2%>%select(Class, Class3), by = 'Class')%>%
-  mutate(Class = Class3)%>%
-  select(-Class3)%>%
-  group_by(Class)%>%
-  summarise(Freq = sum(Freq))%>%
-  pivot_wider(names_from = Class, values_from = Freq)%>%
-  mutate(Name = df.sf.NWIS$Name[1], .before = 1)%>%
-  mutate(R_FORESTNLCD06 = R_DECIDNLCD06+R_EVERGRNLCD06+R_MIXEDFORNLCD06,
-         R_PLANTNLCD06 = R_PASTURENLCD06+R_CROPSNLCD06)%>%
-  pivot_longer(cols = -Name)
+####~~~~Finalize DataLayers ~~~~####
 
 
+df.NWIS.NLCD.2016
 
+df.NWIS.CDL.2008
 
-
-
-
-
-l.NWIS.NLCD.2016<-lapply(l.NWIS.NLCD.2016, \(i) left_join(as.data.frame(i), legend.for.G2%>%select(Class, Class3), by = 'Class')%>%mutate(Class = Class3)%>%select(-Class3)%>%group_by(Class)%>%summarise(Freq = sum(Freq)))
-
-# add back missing varaibles using df.Class3:
-
-l.NWIS.NLCD.2006<-lapply(l.NWIS.NLCD.2006, \(i) left_join(df.Class3, i, by = 'Class')%>%replace(is.na(.), 0))
-l.NWIS.NLCD.2016<-lapply(l.NWIS.NLCD.2016, \(i) left_join(df.Class3, i, by = 'Class')%>%replace(is.na(.), 0))
-
-
-
-
-
-
-
+df.NWIS.DEM
 
 
 

@@ -324,3 +324,245 @@ add_columns <- function(df, columns){
   mutate(df, !!!new)
 }
 
+
+
+# get watershed percent HSG for a single site:
+# *use this function in lapply for multiple sites:
+# if function doesnt work (maybe throws error that says file not found), try emptying Users/ryrug/AppData/Local/Temp folder
+
+# site_no<-keep[1]
+# # 
+# sf.df<-df.sf.NWIS
+
+fun.SURRGO_HSG<-function(site_no, sf.df){
+  
+  # workflow for one site:
+  
+  # set function variables:
+  
+  template<-sf.df$geometry[sf.df$Name==site_no]
+  
+  # download soil data for site:
+  
+  l.soils<-FedData::get_ssurgo(template = template, label = site_no)
+  
+  # look at map:
+  
+  mapview(l.soils[[1]])+mapview(template)
+  
+  # will need to clip but can do that later...
+  
+  # the mukey in the spatial element can be used as a joining column for the HSG, which is located in l.soils$tabular$muaggatt:
+  
+  df.sf.soils<-left_join(l.soils[[1]], l.soils$tabular$muaggatt%>%select(mukey, hydgrpdcd)%>%mutate(MUKEY = as.character(mukey), .keep = 'unused'), by = 'MUKEY')
+  
+  save(df.sf.soils, file = paste0('Processed_Data/SURRGO_dfs/df.sf.soils.', site_no, '.Rdata'))
+  
+  # load('Processed_Data/df.sf.soils.Rdata')
+  
+  # lets filter the MU that are NA and replot:
+  
+  df.sf.soils%>%
+    # drop_na(hydgrpdcd)%>%
+    mapview(., zcol = 'hydgrpdcd')+mapview(template)
+  
+  # it looks like the NAs are water!!
+  
+  # convert to SpatVector to perform spatial analysis:
+  
+  vect.soils<-vect(df.sf.soils%>%drop_na(hydgrpdcd))
+  
+  vect.DA.template<-vect(template)
+  
+  # calcualte watershed area in unit ha:
+  
+  site_DA.ha<-round(expanse(vect.DA.template, unit="ha", transform=TRUE), 2)
+  
+  # crop soils vector to draiange area vector:
+  
+  vect.soils<-terra::crop(vect.soils, vect.DA.template)
+  
+  # look at map:
+  
+  plot(x= vect.soils, y='hydgrpdcd')
+  
+  # add column of each polygons area:
+  
+  vect.soils$area_ha<-expanse(x= vect.soils, unit = 'ha')
+  
+  # make a dataframe of the areas and HSG, and calcualte the percent of each HSG:
+  
+  df.HSG<-data.frame(Area = vect.soils$area_ha, HSG = vect.soils$hydgrpdcd)%>%
+    drop_na(HSG)%>%
+    group_by(HSG)%>%
+    summarize(Watershed_Percent = round(sum(Area)/site_DA.ha, 4))
+  
+}
+
+
+#### fun.NHD.RIP.buffers ####
+
+# i<-39
+
+fun.NHD.RIP.buffers<-function(i, df.site_metadata){
+  
+  print(i)
+  
+  # set up function inputs:
+  
+  long<-df.site_metadata$dec_long_va[i]
+  lat<-df.site_metadata$dec_lat_va[i]
+  
+  # workflow for one site:
+  
+  # run through nhdplusTools workflow:
+  
+  start_point <- st_sfc(st_point(c(long, lat)), crs = 4269)
+  start_comid <- discover_nhdplus_id(start_point)
+  
+  flowline <- navigate_nldi(list(featureSource = "comid", 
+                                 featureID = start_comid), 
+                            mode = "upstreamTributaries", 
+                            distance_km = 1000)
+
+  subset_file <- tempfile(fileext = ".gpkg")
+  subset <- subset_nhdplus(comids = as.integer(flowline$UT$nhdplus_comid),
+                           # output_file = subset_file,
+                           nhdplus_data = "download",
+                           flowline_only = TRUE,
+                           # overwrite = TRUE,
+                           return_data = TRUE)
+
+  flowline <- subset$NHDFlowline_Network
+  # catchment <- subset$CatchmentSP
+  # waterbody <- subset$NHDWaterbody
+  
+  ## Or cando this by reading in from file:
+  
+  # flowline <- sf::read_sf(subset_file, "NHDFlowline_Network")
+  # catchment <- sf::read_sf(subset_file, "CatchmentSP")
+  # waterbody <- sf::read_sf(subset_file, "NHDWaterbody")
+  
+  ## now plot:
+  
+  # plot(sf::st_geometry(flowline), col = "blue")
+  # plot(start_point, cex = 1.5, lwd = 2, col = "red", add = TRUE)
+  # plot(sf::st_geometry(catchment), add = TRUE)
+  # plot(sf::st_geometry(waterbody), col = rgb(0, 0, 1, alpha = 0.5), add = TRUE)
+
+  # this is so cool!!
+  
+  # play around with flowline df:
+  
+  # mapview(flowline, zcol = "ftype")
+  
+  # my goal with the NHD is to use it to calcualte the landuse in the buffer,
+  # so I really only need the StreamRiver ftype. 
+  
+  flowline1<-flowline%>%filter(ftype == 'StreamRiver')
+  
+  # create 100 and 800 meter buffer. use st_union to remove overlap:
+  
+  buffer.100<-st_buffer(flowline1, 100)%>%st_union()
+  
+  buffer.800<-st_buffer(flowline1, 800)%>%st_union()
+  
+  # Look at map:
+  
+  # mapview(buffer.100)+mapview(flowline1)
+  
+  # looks good
+  
+  # calculate the watershed 100 and 800 meter percent in major landuse types. to do this:
+  
+  # Load in the NLCD for the watershed:
+  
+  rast.NLCD<-rast(names.2006[i])
+  
+  # reproject to buffer vector data to match raster data:
+  
+  vect.buffer.100<-vect(buffer.100) 
+  vect.buffer.800<-vect(buffer.800)
+  
+  vect.buffer.100.proj<-terra::project(vect.buffer.100, crs(rast.NLCD))
+  vect.buffer.800.proj<-terra::project(vect.buffer.800, crs(rast.NLCD))
+  
+  # extract frequency tables:
+  
+  df.buffer.freq.100 <- terra::extract(rast.NLCD, vect.buffer.100.proj, ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2))
+  df.buffer.freq.800 <- terra::extract(rast.NLCD, vect.buffer.800.proj, ID=FALSE)%>%group_by_at(1)%>%summarize(Freq=round(n()/nrow(.),2))
+  
+  # makesure each NLCD class is represented. todo this: left join with legend:
+  
+  df.buffer.freq.100<-left_join(legend%>%select(Class), df.buffer.freq.100, by = 'Class')%>%replace(is.na(.), 0)
+  df.buffer.freq.800<-left_join(legend%>%select(Class), df.buffer.freq.800, by = 'Class')%>%replace(is.na(.), 0)
+  
+  # reclassify: the GAGES II predictors for NLCD land use are the sum of a few NLCD classes (see the kable table of the variable descriptions made above). To do this:
+  
+  # create and ordered vector based on legend (legend comes from Ryan_funcitons.R)
+  
+  Class3.for.G2<-c("WATERNLCD06", "SNOWICENLCD06", rep("DEVNLCD06", 4), "BARRENNLCD06", "DECIDNLCD06", "EVERGRNLCD06", "MIXEDFORNLCD06", NA, "SHRUBNLCD06", "GRASSNLCD06", NA, NA, NA, "PASTURENLCD06", "CROPSNLCD06", "WOODYWETNLCD06", "EMERGWETNLCD06")
+  
+  # add an identifier to this vector so the column names are slightly different than the GAGES II predictors:
+  
+  Class3.for.G2<-paste0('R_', Class3.for.G2)
+  
+  # create a df from this vector (for latter use):
+  
+  df.Class3<-data.frame(Class = unique(Class3.for.G2)[complete.cases(unique(Class3.for.G2))])
+  
+  # create new df from the legend dataframe:
+  
+  legend.for.G2<-legend%>%mutate(Class3 = Class3.for.G2)
+  
+  # reclassify the NLCD using this new legend and clean up the dataframe:
+  
+  df.buffer.freq.100<-left_join(df.buffer.freq.100, legend.for.G2%>%select(Class, Class3), by = 'Class')%>%
+    mutate(Class = Class3)%>%
+    select(-Class3)%>%
+    group_by(Class)%>%
+    summarise(Freq = sum(Freq))%>%
+    pivot_wider(names_from = Class, values_from = Freq)%>%
+    mutate(Name = df.sf.NWIS$Name[i], .before = 1)%>%
+    mutate(R_FORESTNLCD06 = R_DECIDNLCD06+R_EVERGRNLCD06+R_MIXEDFORNLCD06,
+           R_PLANTNLCD06 = R_PASTURENLCD06+R_CROPSNLCD06)%>%
+    pivot_longer(cols = -Name)
+  
+  df.buffer.freq.800<-left_join(df.buffer.freq.800, legend.for.G2%>%select(Class, Class3), by = 'Class')%>%
+    mutate(Class = Class3)%>%
+    select(-Class3)%>%
+    group_by(Class)%>%
+    summarise(Freq = sum(Freq))%>%
+    pivot_wider(names_from = Class, values_from = Freq)%>%
+    mutate(Name = df.sf.NWIS$Name[i], .before = 1)%>%
+    mutate(R_FORESTNLCD06 = R_DECIDNLCD06+R_EVERGRNLCD06+R_MIXEDFORNLCD06,
+           R_PLANTNLCD06 = R_PASTURENLCD06+R_CROPSNLCD06)%>%
+    pivot_longer(cols = -Name)
+  
+  # I really only need DEV, PLANT, and FOREST.
+  # so filtering these, pivoting wider, and merging with G2:
+  
+  df.buffer.freq.100<-df.buffer.freq.100%>%
+    filter(name %in% c('R_DEVNLCD06', 'R_PLANTNLCD06', 'R_FORESTNLCD06'))%>%
+    pivot_wider(names_from = name, values_from = value)%>%
+    rename_with(~paste0(., "_100"), starts_with("R_"))
+  
+  df.buffer.freq.800<-df.buffer.freq.800%>%
+    filter(name %in% c('R_DEVNLCD06', 'R_PLANTNLCD06', 'R_FORESTNLCD06'))%>%
+    pivot_wider(names_from = name, values_from = value)%>%
+    rename_with(~paste0(., "_800"), starts_with("R_"))
+  
+  # create a df of the 100 and 800 meter ripiran predictors:
+  
+  df.RIP<-left_join(df.buffer.freq.100, df.buffer.freq.800, by = 'Name')
+  
+  # rename columns to G2, but paste a unique ID to it:
+  
+  names(df.RIP)<-c('Name', paste0('R_', names(df.G2.reduced%>%select(contains('RIP')))))
+  
+  return(df.RIP)
+}
+
+
+
+

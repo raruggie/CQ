@@ -851,19 +851,21 @@ pred_to_keep <- pred_to_keep[!(pred_to_keep %in% "STAID")]
 
 pred_to_keep <- pred_to_keep[!(pred_to_keep %in% c("DEVOPENNLCD06","DEVLOWNLCD06","DEVMEDNLCD06","DEVHINLCD06", "PDEN_DAY_LANDSCAN_2007", "PDEN_NIGHT_LANDSCAN_2007", "CDL_WWHT_SOY_DBL_CROP"))]
 
-# filtering df.G2 to this predictor list:
+# filtering df.G2 to this predictor list and sites:
 
-df.G2.reduced<-df.G2%>%select(c('STAID', pred_to_keep, starts_with('HG')))
+df.G2.reduced<-df.G2%>%
+  select(c('STAID', pred_to_keep, starts_with('HG')))%>%
+  filter(STAID %in% df.TP_CQ$site_no)
 
 # take the average of the RIP and MAIN for each land use:
 
-df.G2.reduced<-df.G2.reduced%>%filter(STAID %in% df.TP_CQ$site_no)%>%
-  rowwise() %>%
-  mutate(MAIN_RIP_DEV_avg = mean(c_across(starts_with("MAINS") | starts_with("RIP") & ends_with("DEV")), na.rm = TRUE),
-         MAIN_RIP_FOREST_avg = mean(c_across(starts_with("MAINS") | starts_with("RIP") & ends_with("FOREST")), na.rm = TRUE),
-         MAIN_RIP_PLANT_avg = mean(c_across(starts_with("MAINS") | starts_with("RIP") & ends_with("PLANT")), na.rm = TRUE),
-         .keep = 'unused'
-         )
+# df.G2.reduced<-df.G2.reduced%>%
+#   rowwise() %>%
+#   mutate(MAIN_RIP_DEV_avg = mean(c_across(starts_with("MAINS") | starts_with("RIP") & ends_with("DEV")), na.rm = TRUE),
+#          MAIN_RIP_FOREST_avg = mean(c_across(starts_with("MAINS") | starts_with("RIP") & ends_with("FOREST")), na.rm = TRUE),
+#          MAIN_RIP_PLANT_avg = mean(c_across(starts_with("MAINS") | starts_with("RIP") & ends_with("PLANT")), na.rm = TRUE),
+#          .keep = 'unused'
+#          )
 
 # adding up the other crops:
 
@@ -874,7 +876,7 @@ names(df.G2.reduced)
 
 # export this predictor set for the 42 sites:
 
-# save(df.G2.reduced, file = 'Processed_Data/df.G2.reduced.Rdata')
+save(df.G2.reduced, file = 'Processed_Data/df.G2.reduced.Rdata')
 
 # combined the reduced predictors df with the already filtered CQ data:
 

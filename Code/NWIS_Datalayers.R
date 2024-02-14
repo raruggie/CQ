@@ -811,13 +811,26 @@ y<-df.sf.NWIS%>%filter(Name %in% keep)%>%select(Name, starts_with('SSURGO'))
 
 # get SURRGO for these sites:
 
-l.soils<-lapply(df.sf.NWIS$Name, \(i) fun.SURRGO_HSG(i, df.sf.NWIS))
+# the connection kept timing out so I did this in batches:
 
-names(l.test.soils)<-keep
+# the first running it got to the 6th site:
+
+l.soils.1to6<-lapply(df.sf.NWIS$Name[1:6], \(i) fun.SURRGO_HSG(i, df.sf.NWIS))
+save(l.soils.1to6, file='Processed_Data/l.soils.1.Rdata')
+
+# the second running it got to 20th site:
+
+l.soils.7to20<-lapply(df.sf.NWIS$Name[7:20], \(i) fun.SURRGO_HSG(i, df.sf.NWIS))
+save(l.soils.7to20, file='Processed_Data/l.soils.2.Rdata')
+
+# third running...
+l.soils.21tox<-lapply(df.sf.NWIS$Name[21:42], \(i) fun.SURRGO_HSG(i, df.sf.NWIS))
+
+names(l.soils)<-df.sf.NWIS$Name[1:5]
 
 # look at how much of the watershed is represented:
 
-lapply(l.test.soils, \(i) sum(i$Watershed_Percent))
+lapply(l.soils, \(i) sum(i$Watershed_Percent))
 
 df.test.soils<-bind_rows(l.test.soils, .id = 'STAID')%>%filter(HSG %in% c('A', 'B', 'C', 'D'))%>%rename(Datalayers = 3)
 

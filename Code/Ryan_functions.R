@@ -329,12 +329,14 @@ add_columns <- function(df, columns){
 # get watershed percent HSG for a single site:
 # *use this function in lapply for multiple sites:
 # if function doesnt work (maybe throws error that says file not found), try emptying Users/ryrug/AppData/Local/Temp folder
-
-# site_no<-keep[1]
-# # 
+# 
+# site_no<-df.sf.NWIS$Name[1]
+# # # 
 # sf.df<-df.sf.NWIS
 
 fun.SURRGO_HSG<-function(site_no, sf.df){
+  
+  print(site_no)
   
   # workflow for one site:
   
@@ -344,7 +346,7 @@ fun.SURRGO_HSG<-function(site_no, sf.df){
   
   # download soil data for site:
   
-  l.soils<-FedData::get_ssurgo(template = template, label = site_no)
+  l.soils<-FedData::get_ssurgo(template = template, label = site_no) 
   
   # look at map:
   
